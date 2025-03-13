@@ -1,304 +1,347 @@
 import { initJsPsych } from "jspsych";
-import htmlKeyboardResponse from "@jspsych/plugin-html-keyboard-response"; // ✅ Import missing plugin
 import htmlButtonResponse from "@jspsych/plugin-html-button-response";
 import audioKeyboardResponse from "@jspsych/plugin-audio-keyboard-response";
 
 // Initialize jsPsych
 const jsPsych = initJsPsych();
 
-// Instruction Trial
-const instruction = {
-    type: htmlButtonResponse,
-    stimulus: "<p>Press any key to listen to the story.</p>",
-    choices: ["Continue"]
-};
+// Function to load and parse CSV
+async function loadQuestions() {
+    const response = await fetch("voice_questions.csv");
+    const text = await response.text();
+    const rows = text.trim().split("\n").slice(1); // Trim whitespace & skip header
 
-// Story Audio Trial
-const audioTrial = {
-    type: audioKeyboardResponse,
-    stimulus: "audio/comprehension1.mp3",
-    prompt: "<p>Listen to the story...</p>",
-    choices: "NO_KEYS",
-    trial_ends_after_audio: true
-};
+    const parsedData = rows.map((row, index) => {
+        const columns = row.split(",");
+        
+        console.log(`Row ${index + 1}:`, columns); // Log CSV row
 
+        if (columns.length < 7) { // Ensure all fields exist
+            console.error(`Row ${index + 1} is incomplete:`, row);
+            return null; // Skip incomplete rows
+        }
 
-const playAllSounds = {
-    type: htmlButtonResponse,
-    stimulus: "<p>Listen carefully! The sounds will play one by one.</p>",
-    choices: ["1", "2", "3", "4"],
-    button_html: function (choice, choice_index) {
-        return `<button class="jspsych-btn sound-btn" id="btn-${choice_index + 1}">${choice}</button>`;
-    },
-    on_load: function () {
-        const btns = document.querySelectorAll(".jspsych-btn");
-        const container = document.createElement("div");
-        container.classList.add("button-container");
-        btns.forEach(btn => container.appendChild(btn));
+        const [story, sound1, sound2, sound3, sound4, correctIndex, audioFile] = columns.map(col => col.trim());
 
-        const jspsychContent = document.querySelector(".jspsych-content");
-        jspsychContent.innerHTML = "";
-        jspsychContent.appendChild(container);
+        const questionObject = {
+            story: story.replace(/"/g, ""), // Remove extra quotes
+            sounds: [sound1, sound2, sound3, sound4],
+            correctIndex: parseInt(correctIndex),
+            audioFile: audioFile
+        };
 
-        // Play sounds in order with highlight
-        const sounds = [
-            "audio/dog.mp3",
-            "audio/cat.mp3",
-            "audio/cow.mp3",
-            "audio/frog.mp3"
-        ];
-        let delay = 500;
+        console.log(`Parsed question ${index + 1}:`, questionObject); // Debugging log
 
-        sounds.forEach((sound, index) => {
-            setTimeout(() => {
-                document.querySelectorAll(".sound-btn").forEach(btn => btn.classList.remove("highlight"));
-                const btn = document.getElementById(`btn-${index + 1}`);
-                if (btn) btn.classList.add("highlight");
+        return questionObject;
+    }).filter(q => q !== null); // Remove any invalid rows
 
-                const audio = new Audio(sound);
-                audio.play();
-
-                setTimeout(() => {
-                    if (btn) btn.classList.remove("highlight");
-                }, 2000);
-            }, delay);
-            delay += 2000;
-        });
-    },
-    trial_duration: 9000,
-    response_ends_trial: false
-};
-
-
-// Selection Trial AFTER Sounds Play
-const audioSelection = {
-    type: htmlButtonResponse,
-    stimulus: "<p>Which sound matches the story?</p>",
-    choices: ["1", "2", "3", "4"],
-    button_html: function (choice, choice_index) {
-        return `<button class="jspsych-btn sound-btn" id="btn-${choice_index + 1}">${choice}</button>`;
-    },
-    on_load: function () {
-        // Ensure buttons are inside the 2x2 grid container
-        const btns = document.querySelectorAll(".jspsych-btn");
-        const container = document.createElement("div");
-        container.classList.add("button-container");
-        btns.forEach(btn => container.appendChild(btn));
-
-        // Insert the grid container inside the experiment display
-        const jspsychContent = document.querySelector(".jspsych-content");
-        jspsychContent.innerHTML = ""; // Clear previous layout
-        jspsychContent.appendChild(container);
-
-        // Audio Hover Logic
-        const sounds = [
-            "audio/dog.mp3",
-            "audio/cat.mp3",
-            "audio/cow.mp3",
-            "audio/frog.mp3"
-        ];
-        let currentAudio = null;
-
-        sounds.forEach((sound, index) => {
-            const btn = document.getElementById(`btn-${index + 1}`);
-            if (btn) {
-                btn.addEventListener("mouseenter", () => {
-                    if (currentAudio) {
-                        currentAudio.pause();
-                        currentAudio.currentTime = 0;
-                    }
-                    currentAudio = new Audio(sound);
-                    currentAudio.play();
-                });
-
-                btn.addEventListener("mouseleave", () => {
-                    if (currentAudio) {
-                        currentAudio.pause();
-                        currentAudio.currentTime = 0;
-                    }
-                });
-            }
-        });
-    },
-    on_finish: function (data) {
-        const selected = data.response;
-        jsPsych.data.get().addToLast({ selected_choice: selected });
-    }
-};
+    console.log("Final Parsed Questions Array:", parsedData);
+    return parsedData;
+}
 
 
 const storyAndSelection = {
     type: htmlButtonResponse,
-    stimulus: `
-        <div id="story-container">
-            <p id="story-text">
-                <strong>Which of these four animal sounds comes from a cow?</strong>
-            </p>
-        </div>
-    `,
+    stimulus: function() {
+        return `<p id="story-text">${jsPsych.timelineVariable("story")}</p>`;
+    },
     choices: ["1", "2", "3", "4"],
     button_html: function(choice, choice_index) {
-        return `<button class="jspsych-btn sound-btn disabled no-hover" id="btn-${choice_index + 1}" disabled>${choice}</button>`;
+        return `<button class="jspsych-btn sound-btn disabled no-hover" id="btn-${choice_index + 1}" disabled data-index="${choice_index}">${choice}</button>`;
     },
     on_load: function () {
-        const jspsychContent = document.querySelector(".jspsych-content");
-
-        // Create a button container
-        const buttonContainer = document.createElement("div");
-        buttonContainer.classList.add("button-container");
-
-        // Move buttons inside the container BEFORE modifying jspsych-content
-        document.querySelectorAll(".jspsych-btn").forEach(btn => buttonContainer.appendChild(btn));
-
-        // Keep the story text visible, just append buttons below
-        const storyContainer = document.querySelector("#story-container");
-        storyContainer.appendChild(buttonContainer);
+        const btns = document.querySelectorAll(".sound-btn");
 
         // Disable buttons initially
-        const btns = document.querySelectorAll(".sound-btn");
         btns.forEach(btn => {
             btn.classList.add("disabled", "no-hover");
             btn.setAttribute("disabled", "true");
         });
 
-        // Play the story
-        let storyAudio = new Audio("audio/comprehension1.mp3");
+        // Play the story audio
+        let storyAudio = new Audio(`audio/${jsPsych.timelineVariable("audioFile")}`);
         storyAudio.play();
 
-        // When story ends, enable buttons and restore hover
-        storyAudio.onended = function() {
-            btns.forEach(btn => {
-                btn.classList.remove("disabled", "no-hover");
-                btn.removeAttribute("disabled");
-                btn.style.opacity = "1"; // Trigger fade-in
+        storyAudio.onended = function () {
+            console.log("📢 Story finished, starting sequential playback.");
+            
+            playSoundsSequentially(q.sounds, () => {
+                console.log("✅ Sequential playback finished, enabling hover play & selection.");
+                
+                enableButtonsWithFade(btns); // Enable buttons with fade
+                enableHoverPlay(q.sounds); // Restore hover play
             });
-
-            // Start playing sounds sequentially
-            playSoundsSequentially();
-
-            // Enable hover play sounds after story
-            enableHoverPlay();
         };
+
+        // ✅ Block button selection until `answerSelectionEnabled = true`
+        btns.forEach(btn => {
+            btn.addEventListener("click", function(event) {
+                if (!answerSelectionEnabled) {
+                    event.preventDefault(); // 🚫 Block selection if not enabled
+                    console.log("Answer selection blocked! Waiting for sounds to finish.");
+                }
+            });
+        });
     },
-    on_finish: function (data) {
-        data.selected_choice = data.response; // Store selection
+    on_finish: function(data) {
+        if (!answerSelectionEnabled) {
+            return false; // Prevent trial from ending early
+        }
     }
 };
 
-function enableHoverPlay() {
-    const sounds = [
-        "audio/dog.mp3",
-        "audio/cat.mp3",
-        "audio/cow.mp3",
-        "audio/frog.mp3"
+// Function to create jsPsych trials dynamically
+async function createTrials() {
+    const questions = await loadQuestions();
+    const timeline = [
+        {
+            type: htmlButtonResponse,
+            stimulus: "<p>Press continue to begin the study.</p>",
+            choices: ["Continue"]
+        }
     ];
 
-    let currentAudio = null;
+    questions.forEach((q, index) => {
+        timeline.push({
+            timeline: [
+                {
+                    type: htmlButtonResponse,
+                    stimulus: `<p id="story-text">${q.story}</p>`,
+                    choices: ["1", "2", "3", "4"],
+                    button_html: function(choice, choice_index) {
+                        return `<button class="jspsych-btn sound-btn disabled no-hover" id="btn-${choice_index + 1}" disabled>${choice}</button>`;
+                    },
+                    on_load: function () {
+                        const jspsychContent = document.querySelector(".jspsych-content");
 
-    sounds.forEach((sound, index) => {
-        const btn = document.getElementById(`btn-${index + 1}`);
-        if (btn) {
-            btn.addEventListener("mouseenter", () => {
-                if (!btn.classList.contains("no-hover")) { // Prevent hover before story ends
-                    if (currentAudio) {
-                        currentAudio.pause();
-                        currentAudio.currentTime = 0;
+                        // Create a button container
+                        const buttonContainer = document.createElement("div");
+                        buttonContainer.classList.add("button-container");
+
+                        // Move buttons inside the container BEFORE modifying jspsych-content
+                        document.querySelectorAll(".jspsych-btn").forEach(btn => buttonContainer.appendChild(btn));
+
+                        // Keep the story text visible, just append buttons below
+                        const storyContainer = document.querySelector("#story-container") || jspsychContent;
+                        storyContainer.appendChild(buttonContainer);
+
+                        // Disable buttons initially
+                        const btns = document.querySelectorAll(".sound-btn");
+                        btns.forEach(btn => {
+                            btn.classList.add("disabled", "no-hover");
+                            btn.setAttribute("disabled", "true");
+                        });
+
+                        // Play the story audio
+                        let storyAudioPath = `audio/${q.audioFile}`;
+                        console.log("Attempting to play:", storyAudioPath);
+
+                        let storyAudio = new Audio(storyAudioPath);
+                        storyAudio.play().catch(error => console.error("Audio playback error:", error));
+
+                        // When story ends, start playing sounds sequentially first
+                        storyAudio.onended = function () {
+                            console.log("📢 Story finished, starting sequential playback.");
+                            
+                            playSoundsSequentially(q.sounds, () => {
+                                console.log("✅ Sequential playback finished, enabling hover play & selection.");
+                                
+                                enableButtonsWithFade(btns); // Enable buttons with fade
+                                enableHoverPlay(q.sounds); // Restore hover play
+                            });
+                        };
+                    },
+                    on_finish: function (data) {
+                        data.selected_choice = data.response; // Store selection
+                        data.correct = data.response == q.correctIndex; // Mark correctness
                     }
-                    currentAudio = new Audio(sound);
-                    currentAudio.play();
+                },
+                {
+                    type: htmlButtonResponse,
+                    stimulus: function() {
+                        const lastChoice = jsPsych.data.get().last(1).values()[0].selected_choice;
+                        return `<p>You selected option ${parseInt(lastChoice) + 1}. Are you sure about your choice?</p>`;
+                    },
+                    choices: ["Confirm", "Choose Again"],
+                    on_start: function() {
+                        const lastChoice = jsPsych.data.get().last(1).values()[0].selected_choice;
+                        const audio = new Audio(`audio/${q.sounds[lastChoice]}`);
+                        audio.play();
+                    },
+                    on_finish: function (data) {
+                        if (data.response === 1) {
+                            console.log("User selected 'Choose Again' - replaying question.");
+                            data.replay = true; // ✅ Mark for repetition
+                        } else {
+                            data.replay = false; // ✅ Move on if confirmed
+                        }
+                    }
                 }
-            });
+            ],
+            loop_function: function() {
+                const lastTrialData = jsPsych.data.get().last(1).values();
+                return lastTrialData.length > 0 && lastTrialData[0].replay === true; // ✅ Repeat if "Choose Again" is selected
+            }
+        });
+    });
 
-            btn.addEventListener("mouseleave", () => {
-                if (currentAudio) {
-                    currentAudio.pause();
-                    currentAudio.currentTime = 0;
-                }
-            });
+    // **Final Message**
+    timeline.push({
+        type: htmlButtonResponse,
+        stimulus: "<p>Thank you for participating! Click below to download your data.</p>",
+        choices: ["Download Data"],
+        on_finish: function() {
+            jsPsych.data.get().localSave('csv', 'experiment_data.csv');
         }
+    });
+
+    // Start the experiment
+    jsPsych.run(timeline);
+}
+
+// Function to play the story and manage button activation
+function playStoryAndManageButtons(q, btns) {
+    let storyAudio = new Audio(`audio/${q.audioFile}`);
+    console.log(`🎙️ Playing story: ${q.audioFile}`);
+
+    storyAudio.play().catch(error => console.error("Audio playback error:", error));
+
+    storyAudio.onended = function () {
+        console.log("📢 Story finished, starting sequential playback.");
+        playSoundsSequentially(q.sounds, () => {
+            console.log("✅ Sequential playback finished, enabling hover play & selection.");
+            enableButtonsWithFade(btns);
+            enableHoverPlay(q.sounds);
+        });
+    };
+}
+
+// Function to enable buttons with a fade-in effect
+function enableButtonsWithFade(btns) {
+    btns.forEach(btn => {
+        btn.classList.remove("disabled", "no-hover");
+        btn.removeAttribute("disabled");
+
+        btn.style.transition = "opacity 0.6s ease-in-out"; // ✅ Ensure smooth transition
+        btn.style.opacity = "1"; // ✅ Fade-in effect
     });
 }
 
 
-function playSoundsSequentially() {
-    const sounds = [
-        "audio/dog.mp3",
-        "audio/cat.mp3",
-        "audio/cow.mp3",
-        "audio/frog.mp3"
-    ];
-    
+// Function to play sounds sequentially, then trigger a callback when done
+function playSoundsSequentially(sounds, onComplete) {
     let index = 0;
+    let totalDuration = 0; // Store total playback duration
 
     function playNextSound() {
-        if (index >= sounds.length) return; // Stop when done
+        if (index >= sounds.length) {
+            console.log(`✅ All sounds played. Total duration: ${totalDuration}ms`);
+            onComplete(); // ✅ Enable buttons immediately after last sound
+            return;
+        }
 
         document.querySelectorAll(".sound-btn").forEach(btn => btn.classList.remove("highlight"));
         const btn = document.getElementById(`btn-${index + 1}`);
         if (btn) btn.classList.add("highlight");
 
-        const audio = new Audio(sounds[index]);
+        const audio = new Audio(`audio/${sounds[index]}`);
+        console.log(`🔊 Playing sound ${index + 1}: ${sounds[index]}`);
+
+        audio.onloadedmetadata = function () {
+            totalDuration += audio.duration * 1000; // Convert to milliseconds
+        };
+
         audio.play();
 
-        audio.onended = function() {
+        audio.onended = function () {
             if (btn) btn.classList.remove("highlight");
             index++;
-            playNextSound(); // Play the next sound after the current one finishes
+            playNextSound();
         };
     }
 
     playNextSound();
 }
 
-// Confirmation Trial
+// Restore play-on-hover after sequential sounds finish
+function enableHoverPlay(sounds) {
+    console.log("🎧 Hover play enabled.");
+    let currentAudio = null;
+
+    sounds.forEach((sound, index) => {
+        const btn = document.getElementById(`btn-${index + 1}`);
+        if (btn) {
+            btn.onmouseenter = () => {
+                if (currentAudio) {
+                    currentAudio.pause();
+                    currentAudio.currentTime = 0;
+                }
+                console.log(`🔊 Hover play: ${sound}`);
+                currentAudio = new Audio(`audio/${sound.trim()}`);
+                currentAudio.play();
+            };
+
+            btn.onmouseleave = () => {
+                if (currentAudio) {
+                    currentAudio.pause();
+                    currentAudio.currentTime = 0;
+                }
+            };
+        }
+    });
+}
+
+// Ensure fade-in effect is properly applied in CSS
+document.addEventListener("DOMContentLoaded", () => {
+    const style = document.createElement("style");
+    style.innerHTML = `
+        .enabled {
+            transition: opacity 0.5s ease-in-out;
+            opacity: 1 !important;
+        }
+        .sound-btn {
+            opacity: 0; /* Start hidden */
+        }
+    `;
+    document.head.appendChild(style);
+});
+
+
+let hoverEnabled = false; // Controls hover play behavior
+let answerSelectionEnabled = false; // Controls when answers can be selected
+
+
+
+
+
 const confirmChoice = {
     type: htmlButtonResponse,
     stimulus: function() {
         const lastChoice = jsPsych.data.get().last(1).values()[0].selected_choice;
-        return `<p>You selected option ${parseInt(lastChoice) + 1}. Are you sure?</p>`;
+        return `<p>You selected option ${parseInt(lastChoice) + 1}. Are you sure about your choice?</p>`;
     },
     choices: ["✅ Confirm", "❌ Choose Again"],
     on_start: function() {
         const lastChoice = jsPsych.data.get().last(1).values()[0].selected_choice;
-        const sounds = ["audio/dog.mp3", "audio/cat.mp3", "audio/cow.mp3", "audio/frog.mp3"];
-        const audio = new Audio(sounds[lastChoice]);
+        const sounds = jsPsych.timelineVariable("sounds");
+        const audio = new Audio(`audio/${sounds[lastChoice]}`);
         audio.play();
     },
-    on_finish: function (data) {
-        data.replay_story = data.response === 1; // Replay if "Choose Again" is selected
+    on_finish: function(data) {
+        if (data.response === 1) { // "Choose Again" was selected
+            console.log("User chose to repeat the same question.");
+            return true; // 🚀 Instead of advancing, repeat this trial
+        }
     }
 };
 
-// Selection Loop
 const selectionLoop = {
     timeline: [storyAndSelection, confirmChoice],
     loop_function: function() {
         const lastTrialData = jsPsych.data.get().last(1).values();
-        return lastTrialData.length > 0 && lastTrialData[0].replay_story; // 🔄 Replay if "Choose Again" was selected
+        return lastTrialData.length > 0 && lastTrialData[0].response === 1; // 🔄 Repeat if "Choose Again" was selected
     }
 };
 
-
-const timeline = [
-    instruction,  
-    selectionLoop, // 🚀 Handles story playback itself
-    {
-        type: htmlButtonResponse,
-        stimulus: "<p>Thank you for participating! Click below to download your data.</p>",
-        choices: ["💾 Download Data"],
-        on_finish: function() {
-            jsPsych.data.get().localSave('csv', 'experiment_data.csv');
-        }
-    }
-];
-
-// Start the experiment
-jsPsych.run(timeline);
-
-console.log(jsPsych.data.get().csv());
-
-
-// Print the experiment data to the console (for debugging)
-jsPsych.data.get().csv(); // Logs data in CSV format
-console.log(jsPsych.data.get().json()); // Logs data in JSON format
-
+// Load and start the experiment
+createTrials();

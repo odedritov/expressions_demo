@@ -35,8 +35,9 @@ body, .jspsych-content {
     color: white;
     font-weight: bold;
     cursor: pointer;
-    transition: opacity 0.6s ease-in-out, transform 0.2s ease-in-out, background 0.3s ease-in-out;
-    opacity: 0; /* Start hidden */
+    /*transition: opacity 0.6s ease-in-out, transform 0.2s ease-in-out, background 0.3s ease-in-out; */
+    transition: opacity 0.6s ease-in-out; /* Smooth transition for opacity */
+    opacity: 0; /* Start invisible */
     box-shadow: 4px 4px 8px rgba(0, 0, 0, 0.3);
 }
 
