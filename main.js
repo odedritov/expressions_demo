@@ -14,7 +14,7 @@ async function loadQuestions() {
     const csvPath = "https://odedritov.github.io/expressions_demo/voice_questions.csv"; // FULL URL
 
     try {
-        const response = await fetch(csvPath, { mode: "no-cors" });;
+        const response = await fetch(csvPath); // ✅ Removed no-cors
 
         console.log("📥 Fetch response:", response);
 
@@ -33,45 +33,36 @@ async function loadQuestions() {
             return [];
         }
 
-        const parsedData = rows.map(row => {
-            const columns = row.split(",").map(col => col.trim());
-            console.log("➡️ Parsed Columns:", columns);
-            return columns;
-        });
+        // ✅ Parse CSV rows into structured question objects
+        const parsedData = rows.map((row, index) => {
+            const columns = row.split(",");
 
-        return parsedData;
+            if (columns.length < 9) { // Ensure all fields exist
+                console.error(`❌ Row ${index + 1} is incomplete:`, row);
+                return null;
+            }
+
+            const [story, sound1, sound2, sound3, sound4, correctIndex, audioFile, confirmText, confirmSound] = columns.map(col => col.trim());
+
+            const questionObject = {
+                story: story.replace(/"/g, ""), // Remove extra quotes
+                sounds: [sound1, sound2, sound3, sound4],
+                correctIndex: parseInt(correctIndex),
+                audioFile: audioFile,
+                confirmText: confirmText.replace(/"/g, ""), // Store confirmation text
+                confirmSound: confirmSound // Store confirmation sound file
+            };
+
+            console.log(`✅ Loaded question ${index + 1}:`, questionObject);
+            return questionObject;
+        }).filter(q => q !== null);
+
+        console.log("📋 Final Questions Array:", parsedData);
+        return parsedData; // ✅ Merged return statement
     } catch (error) {
         console.error("❌ CSV Load Error:", error);
         return [];
     }
-    const text = await response.text();
-    const rows = text.trim().split("\n").slice(1); // Skip header
-
-    const parsedData = rows.map((row, index) => {
-        const columns = row.split(",");
-
-        if (columns.length < 9) { // Ensure all fields exist
-            console.error(`❌ Row ${index + 1} is incomplete:`, row);
-            return null;
-        }
-
-        const [story, sound1, sound2, sound3, sound4, correctIndex, audioFile, confirmText, confirmSound] = columns.map(col => col.trim());
-
-        const questionObject = {
-            story: story.replace(/"/g, ""), // Remove extra quotes
-            sounds: [sound1, sound2, sound3, sound4],
-            correctIndex: parseInt(correctIndex),
-            audioFile: audioFile,
-            confirmText: confirmText.replace(/"/g, ""), // Store confirmation text
-            confirmSound: confirmSound // Store confirmation sound file
-        };
-
-        console.log(`✅ Loaded question ${index + 1}:`, questionObject);
-        return questionObject;
-    }).filter(q => q !== null);
-
-    console.log("📋 Final Questions Array:", parsedData);
-    return parsedData;
 }
 
 
