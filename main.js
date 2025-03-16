@@ -11,8 +11,8 @@ const jsPsych = initJsPsych();
 async function loadQuestions() {
     console.log("📂 Attempting to fetch CSV...");
 
-    const csvPath = "https://odedritov.github.io/expressions_demo/voice_questions.csv"; // FULL URL
-
+    const csvPath = "./voice_questions.csv";  // ✅ Try relative path
+    
     try {
         const response = await fetch(csvPath); // ✅ Removed no-cors
 
