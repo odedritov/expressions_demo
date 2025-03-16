@@ -9,15 +9,35 @@ const jsPsych = initJsPsych();
 
 // Function to load and parse CSV
 async function loadQuestions() {
-    try {
-        const response = await fetch("/voice_questions.csv"); // ✅ Fetch from public folder
-        if (!response.ok) throw new Error("Network response was not ok");
-        
-        const text = await response.text();
-        console.log("✅ CSV Loaded Successfully:\n", text);
+    console.log("📂 Attempting to fetch CSV...");
 
-        const rows = text.trim().split("\n").slice(1); // Remove headers
-        const parsedData = rows.map(row => row.split(",").map(col => col.trim()));
+    const csvPath = "https://odedritov.github.io/expressions_demo/voice_questions.csv"; // FULL URL
+
+    try {
+        const response = await fetch(csvPath, { mode: "no-cors" });;
+
+        console.log("📥 Fetch response:", response);
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+
+        const text = await response.text();
+        console.log("✅ CSV Loaded:\n", text); // Log CSV contents
+
+        const rows = text.trim().split("\n").slice(1); // Remove header
+        console.log("🔍 Parsed Rows:", rows); // Log parsed rows
+
+        if (rows.length === 0) {
+            console.error("❌ No rows found in CSV!");
+            return [];
+        }
+
+        const parsedData = rows.map(row => {
+            const columns = row.split(",").map(col => col.trim());
+            console.log("➡️ Parsed Columns:", columns);
+            return columns;
+        });
 
         return parsedData;
     } catch (error) {
