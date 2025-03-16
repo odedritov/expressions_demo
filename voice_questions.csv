@@ -1,0 +1,3 @@
+story,sound1,sound2,sound3,sound4,correct_index,audio_file
+"Which of these animal sounds comes from a cow?",dog.mp3,cat.mp3,cow.mp3,frog.mp3,2,comprehension1.mp3,"Do you think that this one is the cow?",comprehension1_confirmation.mp3
+"Which of these animal sounds comes from a frog?",frog.mp3,dog.mp3,cat.mp3,cow.mp3,1,comprehension2.mp3,"Do you think that this one is the frog?",comprehension2_confirmation.mp3
