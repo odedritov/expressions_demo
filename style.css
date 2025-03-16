@@ -1,9 +1,70 @@
+/* 1️⃣ Full-Screen Grayscale Background */
+/* body {
+    background: linear-gradient(135deg, #d3d3d3, #808080); 
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+} */
+
+/* 1️⃣ Background Image for Full Screen */
+body {
+    background: url('https://berkeley.yul1.qualtrics.com/ControlPanel/Graphic.php?IM=IM_3IuFkxUrkSNOrhr') no-repeat center center fixed;
+    background-size: cover; /* Ensures it covers the entire screen */
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+}
+
+/* 2️⃣ White Container for Story & Buttons */
+#content-container {
+    max-width: 640px; /* Adjust as needed */
+    width: 90%;
+    padding: 30px;
+    background: white;
+    border-radius: 20px;
+    box-shadow: 6px 6px 15px rgba(0, 0, 0, 0.2); /* Soft shadow */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+/* 3️⃣ Story Text with Boundaries */
+#story-container {
+    max-width: 690px;
+    min-height: 100px;
+    padding: 15px;
+    text-align: center;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    white-space: normal;
+    background: none !important;  /* ❌ REMOVE background */
+    box-shadow: none !important;  /* ❌ REMOVE shadow */
+}
+
+/* 4️⃣ Ensure Buttons Are Independent of Story Width */
+.button-container {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr); /* Two buttons per row */
+    gap: 20px;
+    justify-items: center;
+    align-items: center;
+    width: 100%;
+    margin-top: 20px;
+}
+
+
 /* General Styling */
 body, .jspsych-content {
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; /* Clean, modern font */
+    font-family: 'lexend'; /* Clean, modern font */
     font-size: 22px; /* Bigger, but not too playful */
     text-align: center;
-    background: linear-gradient(135deg, #ff9a9e, #fad0c4); /* Soft gradient */
     min-height: 100vh;
     display: flex;
     flex-direction: column;
@@ -27,8 +88,8 @@ body, .jspsych-content {
 .sound-btn {
     font-size: 28px; /* Larger font */
     padding: 25px;
-    width: 200px;
-    height: 100px;
+    width: 300px;
+    height: 170px;
     border-radius: 20px;
     background: linear-gradient(145deg, #ffcc00, #ff9900);
     border: 3px solid #d48806;
@@ -112,17 +173,14 @@ body, .jspsych-content {
     transform: scale(1.1);
 }
 
-/* Story text styling */
-#story-text {
-    font-size: 28px; /* Bigger for readability */
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; /* Now uses the sleek font */
-    font-weight: 600;
-    text-align: center;
-    color: #222;
-    margin-bottom: 20px;
-    line-height: 1.5; /* Improve readability */
-}
 
+
+#story-container p, #story-text {
+    max-width: 700px; /* ✅ Limit width */
+    font-size: 44px !important; /* ✅ FORCE it to override body */
+    line-height: 1.4 !important;
+    color: black !important;
+}
 /* Keep buttons in a 2x2 grid */
 .button-container {
     display: grid;
@@ -132,4 +190,44 @@ body, .jspsych-content {
     align-items: center;
     width: 100%;
     margin-top: 20px;
+}
+
+/* 🔹 Base styles for confirmation buttons */
+.confirm-btn {
+    font-size: 36px !important; /* Bigger text */
+    width: 300px !important;
+    height: 120px !important;
+    border-radius: 15px !important;
+    font-weight: bold !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 10px !important; /* Space between text & icon */
+    transition: all 0.3s ease-in-out !important;
+    cursor: pointer !important;
+    box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* ✅ Green "Yes" Button */
+#confirm-yes {
+    background-color: #4CAF50 !important; /* Green */
+    color: white !important;
+    border: 3px solid #388E3C !important;
+}
+
+#confirm-yes:hover {
+    background-color: #388E3C !important;
+    transform: scale(1.1) !important;
+}
+
+/* ❌ Red "No" Button */
+#confirm-no {
+    background-color: #E53935 !important; /* Red */
+    color: white !important;
+    border: 3px solid #B71C1C !important;
+}
+
+#confirm-no:hover {
+    background-color: #B71C1C !important;
+    transform: scale(1.1) !important;
 }
