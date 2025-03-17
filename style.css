@@ -334,14 +334,53 @@ body, .jspsych-content {
     line-height: 1 !important; /* Reduces vertical spacing */
 }
 
+.bodies-block #story-container p, #story-text {
+    margin: 0px !important;
+    padding: 0px !important;
+    max-width: 700px; /* ✅ Limit width */
+    font-size: 44px !important; /* ✅ FORCE it to override body */
+    line-height: 1.4 !important;
+    color: black !important;
+}
+
+.bodies-block #confirmation-container {
+    margin: 0px !important;
+    padding: 0px !important;
+}
+
 /* Center and enlarge the confirmation image */
 .confirmation-image {
     display: block;
-    margin: 0 auto !important;  /* Center the image horizontally */
-    width: 500px !important;  /* Make it larger */
+}
+
+
+/* 🔹 General Confirmation Image Styling */
+.confirmation-img {
+    display: block;
+    margin: 20px auto; /* Center horizontally */
+    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.3);
+}
+
+/* 🔹 Specific Styling for Faces Confirmation Image */
+.faces-confirmation {
+    margin: 10 auto !important;  /* Center the image horizontally */
+    width: 600px !important;  /* Make it larger */
     height: auto !important;  /* Maintain aspect ratio */
     object-fit: contain !important; /* Ensure it fits nicely */
     text-align: center !important; /* Center any text wrapping */
+    height: auto; /* Maintain aspect ratio */
+    border-radius: 20px; /* Optional: Rounded corners */
+}
+
+/* 🔹 Specific Styling for Bodies Confirmation Image */
+.bodies-confirmation {
+    margin: 10 auto !important;  /* Center the image horizontally */
+    width: 300px !important;  /* Make it larger */
+    height: auto !important;  /* Maintain aspect ratio */
+    object-fit: contain !important; /* Ensure it fits nicely */
+    text-align: center !important; /* Center any text wrapping */
+    height: auto; /* Maintain aspect ratio */
+    border-radius: 20px; /* Optional: Rounded corners */
 }
 
 .confirmation-container {
@@ -358,8 +397,62 @@ body, .jspsych-content {
     box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
 }
 
-.confirmation-img {
-    display: block;
-    margin: 10px auto;
-    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.3);
+.body-option {
+    width: 250px; /* Adjust for body images */
+    height: auto; /* Different aspect ratio */
+    object-fit: contain;
+}
+
+.body-option:hover {
+    transform: scale(1.1);
+    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+}
+
+.body-option.disabled {
+    cursor: not-allowed;
+}
+
+.bodies-block #content-container {
+    max-width: 1000px !important; /* Increase width for bodies */
+    width: 95% !important;
+}
+
+
+/* 🔹 Bodies block layout */
+.bodies-flex-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 30px; /* Space between text and images */
+    max-width: 2000px !important;
+    margin: 0 auto;
+}
+
+/* 📝 Story text on the left */
+.bodies-story {
+    flex: 1;
+    text-align: left;
+    max-width: 800px;
+}
+
+/* 🖼️ Images on the right */
+.bodies-images {
+    display: grid;
+    grid-template-columns: 2fr 2fr; /* Two images per row */
+    gap: 20px;
+    justify-content: center;
+    align-items: center;
+}
+
+/* ✅ Make sure images resize properly */
+.body-option {
+    height: 400px; /* Adjust as needed */
+    width: auto;
+    cursor: pointer;
+    transition: transform 0.2s ease-in-out;
+}
+
+.body-option:hover {
+    transform: scale(1.1);
 }
