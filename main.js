@@ -88,7 +88,7 @@ const storyAndSelection = {
         return `<button class="jspsych-btn sound-btn disabled no-hover" id="btn-${choice_index + 1}" disabled data-index="${choice_index}">${choice}</button>`;
     },
     on_load: function () {
-
+        
         console.log("🚀 Trial started! Checking content...");
     
         // Log the raw HTML
@@ -245,16 +245,20 @@ async function createTrials() {
                             console.log("✅ #content-container found.");
                         }
                     
+                        // ✅ Select buttons ONCE to avoid redeclaration
                         const btns = document.querySelectorAll(".sound-btn");
                     
                         // ✅ Ensure buttons have correct dataset.index
                         btns.forEach((btn, index) => {
-                            btn.dataset.index = index; // Set index correctly
+                            btn.dataset.index = index;
                             btn.classList.add("disabled", "no-hover");
                             btn.setAttribute("disabled", "true");
+                    
+                            // ✅ Apply initial cursor styling
+                            btn.style.cursor = "not-allowed";
                         });
                     
-                        // Play the story audio
+                        // ✅ Play the story audio
                         let storyAudio = new Audio(`audio/${q.audioFile}`);
                         storyAudio.play();
                     
@@ -266,6 +270,11 @@ async function createTrials() {
                                 
                                 enableButtonsWithFade(btns);
                                 enableHoverPlay(q.sounds);
+                    
+                                // ✅ Reapply correct cursor styling AFTER enabling buttons
+                                btns.forEach(button => {
+                                    button.style.cursor = "pointer"; // Ensures clickable cursor after enabling
+                                });
                             });
                         };
                     
@@ -435,7 +444,11 @@ function playSoundsSequentially(sounds, onComplete) {
 
         document.querySelectorAll(".sound-btn").forEach(btn => btn.classList.remove("highlight"));
         const btn = document.getElementById(`btn-${index + 1}`);
-        if (btn) btn.classList.add("highlight");
+
+        // ✅ Even if `no-hover` is set, manually apply highlight class
+        if (btn) {
+            btn.classList.add("highlight");
+        }
 
         const audio = new Audio(`audio/${sounds[index]}`);
         console.log(`🔊 Playing sound ${index + 1}: ${sounds[index]}`);
