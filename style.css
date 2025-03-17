@@ -21,6 +21,8 @@ body {
     margin: 0;
 }
 
+
+
 /* 2️⃣ White Container for Story & Buttons */
 #content-container {
     max-width: 640px; /* Adjust as needed */
@@ -271,4 +273,93 @@ body, .jspsych-content {
 /* ❌ Prevents accidental text selection inside buttons */
 .sound-btn, .confirm-btn, .jspsych-btn {
     user-select: none !important;
+}
+
+
+/* Increase image size for story page */
+.face-option {
+    width: 2000px !important;  /* Increased from 300px */
+    height: auto !important;  /* Maintain aspect ratio */
+    max-width: 100% !important; /* Prevents overflow */
+    object-fit: contain !important;
+}
+
+/* Reduce padding ONLY for faces */
+.faces-block #story-container {
+    padding-top: 0px !important;
+    padding-bottom: 0px !important;
+    margin-top: 0px !important;
+    margin-bottom: 0px !important;
+}
+
+.faces-block .button-container {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important; /* 2x2 grid */
+    gap: 15px !important; /* Spacing between images */
+    justify-items: center !important; /* Center inside grid */
+    align-items: center !important;
+    width: 100% !important;
+    max-width: 600px !important; /* Keep it inside the white container */
+    overflow: hidden !important;
+}
+
+.faces-block #content-container {
+    max-width: 2000px !important; /* Wider container to fit larger images */
+    width: 95% !important; /* Responsive scaling */
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 20px !important;
+}
+
+
+.faces-block .button-container {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important; /* 2 images per row */
+    gap: 25px !important; /* Space between images */
+    justify-content: center !important; /* Center the grid */
+    align-items: center !important;
+    width: 100% !important;
+    max-width: 900px !important; /* Fits inside the container */
+    margin: 0 auto !important; /* Center horizontally */
+    padding: 10px !important;
+}
+
+
+
+.faces-block #story-container p {
+    margin: 10px !important;
+    padding: 0px !important;
+    line-height: 1 !important; /* Reduces vertical spacing */
+}
+
+/* Center and enlarge the confirmation image */
+.confirmation-image {
+    display: block;
+    margin: 0 auto !important;  /* Center the image horizontally */
+    width: 500px !important;  /* Make it larger */
+    height: auto !important;  /* Maintain aspect ratio */
+    object-fit: contain !important; /* Ensure it fits nicely */
+    text-align: center !important; /* Center any text wrapping */
+}
+
+.confirmation-container {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+    text-align: center !important;
+}
+
+.face-option:hover {
+    transform: scale(1.2);
+    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+.confirmation-img {
+    display: block;
+    margin: 10px auto;
+    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.3);
 }

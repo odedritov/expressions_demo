@@ -92,6 +92,16 @@ const storyAndSelection = {
         return `<button class="jspsych-btn sound-btn disabled no-hover" id="btn-${choice_index + 1}" disabled data-index="${choice_index}">${choice}</button>`;
     },
     on_load: function () {
+
+        if (q.block === "faces") {
+            document.body.classList.add("faces-block");  // Apply faces-specific styling
+        } else {
+            document.body.classList.remove("faces-block"); // Ensure it's removed for other blocks
+        }
+
+        jsPsych.getDisplayElement().addEventListener("jspsych-trial-end", function () {
+            document.body.classList.remove("faces-block");  // Remove after the trial ends
+        });
         
         console.log("🚀 Trial started! Checking content...");
     
@@ -282,44 +292,96 @@ async function createTrials() {
                                     <p id="story-text">${q.story}</p>
                                 </div>
                                 <div class="button-container">
-                                    <button class="sound-btn" id="btn-1" disabled>1</button>
-                                    <button class="sound-btn" id="btn-2" disabled>2</button>
-                                    <button class="sound-btn" id="btn-3" disabled>3</button>
-                                    <button class="sound-btn" id="btn-4" disabled>4</button>
+                                    ${
+                                        q.block === "faces"
+                                        ? `
+                                            <img class="face-option" id="btn-1" src="faces/${q.sounds[0]}" data-index="0" />
+                                            <img class="face-option" id="btn-2" src="faces/${q.sounds[1]}" data-index="1" />
+                                            <img class="face-option" id="btn-3" src="faces/${q.sounds[2]}" data-index="2" />
+                                            <img class="face-option" id="btn-4" src="faces/${q.sounds[3]}" data-index="3" />
+                                        `
+                                        : `
+                                            <button class="sound-btn" id="btn-1" disabled>1</button>
+                                            <button class="sound-btn" id="btn-2" disabled>2</button>
+                                            <button class="sound-btn" id="btn-3" disabled>3</button>
+                                            <button class="sound-btn" id="btn-4" disabled>4</button>
+                                        `
+                                    }
                                 </div>
                             </div>
                         `,
                         choices: [],
                         on_load: function () {
-                            const btns = document.querySelectorAll(".sound-btn");
 
+                            // Determine if the current block is "faces"
+                            if (q.block === "faces") {
+                                document.body.classList.add("faces-block");  // Apply faces-specific styling
+                            } else {
+                                document.body.classList.remove("faces-block"); // Ensure it's removed for other blocks
+                            }
+
+                            // Add event listener to clean up after trial ends
+                            jsPsych.getDisplayElement().addEventListener("jspsych-trial-end", function () {
+                                document.body.classList.remove("faces-block");  // Remove after the trial ends
+                            });
+                            // Select both buttons (for voices/bodies) and images (for faces)
+                            const btns = document.querySelectorAll(".sound-btn, .face-option");
+                        
+                            // Disable all options initially
                             btns.forEach((btn, index) => {
                                 btn.dataset.index = index;
                                 btn.classList.add("disabled", "no-hover");
                                 btn.setAttribute("disabled", "true");
                             });
-
-                            let storyAudio = new Audio(`audio/${q.audioFile}`);  // ✅ Change q.story_audio to q.audioFile
-                            console.log(`🎵 Attempting to play: audio/${q.audioFile}`); // ✅ Debugging log
+                        
+                            // Play the story audio
+                            let storyAudio = new Audio(`audio/${q.audioFile}`);
+                            console.log(`🎵 Attempting to play: audio/${q.audioFile}`);
                             storyAudio.play();
-
+                        
                             storyAudio.onended = function () {
-                                playSoundsSequentially(q.sounds, () => {
-                                    enableButtonsWithFade(btns);
-                                    enableHoverPlay(q.sounds);
-                                });
+                                console.log("📢 Story finished.");
+                            
+                                if (q.block === "faces") {
+                                    console.log("🖼️ Faces block detected! Enabling images.");
+                                    enableSelection(btns); // Enable selection immediately for faces
+                                } else {
+                                    console.log("🎵 Playing sequential sounds for non-faces block.");
+                                    playSoundsSequentially(q.sounds, () => {
+                                        enableSelection(btns);
+                                        enableHoverPlay(q.sounds); // ✅ Restore hover play for voices
+                                    });
+                                }
                             };
-
+                        
+                            // ✅ Function to enable buttons or images after the appropriate delay
+                            function enableSelection(btns) {
+                                btns.forEach(btn => {
+                                    btn.classList.remove("disabled", "no-hover");
+                                    btn.removeAttribute("disabled");
+                                    btn.style.cursor = "pointer"; // Ensure cursor changes properly
+                                });
+                        
+                                answerSelectionEnabled = true; // ✅ Allow selections
+                                console.log("🟢 answerSelectionEnabled set to true.");
+                            }
+                        
+                            // ✅ Handle both button & image selection
                             btns.forEach(btn => {
                                 btn.addEventListener("click", function(event) {
                                     if (!answerSelectionEnabled) {
                                         event.preventDefault();
+                                        console.log("🚫 Selection blocked until ready.");
                                         return;
                                     }
-
+                        
                                     const chosenIndex = parseInt(this.dataset.index);
                                     if (!isNaN(chosenIndex)) {
-                                        jsPsych.finishTrial({ selected_choice: chosenIndex });
+                                        console.log(`✅ Selected choice: ${chosenIndex}, File: ${q.sounds[chosenIndex]}`);
+                                        jsPsych.finishTrial({ 
+                                            selected_choice: chosenIndex,
+                                            selected_file: q.sounds[chosenIndex] // Store actual file selected
+                                        });
                                     }
                                 });
                             });
@@ -355,11 +417,18 @@ async function createTrials() {
                         stimulus: function() {
                             const lastChoice = jsPsych.data.get().last(1).values()[0]?.selected_choice;
                             if (lastChoice === undefined) return `<p>Error: Could not load confirmation text.</p>`;
-
+                        
                             return `
                                 <div id="content-container">
                                     <div id="story-container">
                                         <p id="story-text">${q.confirmText}</p>
+                                    </div>
+                                    <div class="confirmation-container">
+                                        ${
+                                            q.block === "faces" 
+                                            ? `<img class="confirmation-img" src="faces/${q.sounds[lastChoice]}" />`
+                                            : ""
+                                        }
                                     </div>
                                     <div class="button-container">
                                         <button class="confirm-btn" id="confirm-yes">✅ Yes</button>
@@ -369,24 +438,52 @@ async function createTrials() {
                             `;
                         },
                         choices: [],
-                        on_start: function() {
-                            const lastChoice = jsPsych.data.get().last(1).values()[0]?.selected_choice;
-                            let confirmAudio = new Audio(`audio/${q.confirmSound}`);
-                            confirmAudio.play();
-
-                            confirmAudio.onended = function () {
-                                let selectedSound = new Audio(`audio/${q.sounds[lastChoice]}`);
-                                selectedSound.play();
-                            };
-                        },
                         on_load: function() {
+                            console.log("🟢 Confirmation page loaded, waiting for user input.");
+                        
+                            // Ensure buttons exist before adding event listeners
+                            const confirmYes = document.getElementById("confirm-yes");
+                            const confirmNo = document.getElementById("confirm-no");
+                        
+                            if (!confirmYes || !confirmNo) {
+                                console.error("❌ ERROR: Confirmation buttons are missing!");
+                                return;
+                            }
+                        
+                            // ✅ Remove existing event listeners to prevent duplicates
+                            confirmYes.replaceWith(confirmYes.cloneNode(true));
+                            confirmNo.replaceWith(confirmNo.cloneNode(true));
+                        
+                            // ✅ Re-select buttons after cloning
                             document.getElementById("confirm-yes").addEventListener("click", () => {
+                                console.log("✅ User confirmed choice!");
                                 jsPsych.finishTrial({ confirmed: true });
                             });
-
+                        
                             document.getElementById("confirm-no").addEventListener("click", () => {
+                                console.log("❌ User chose to reselect!");
                                 jsPsych.finishTrial({ confirmed: false });
                             });
+                        
+                            console.log("✅ Event listeners attached to confirmation buttons.");
+                        },
+                        on_start: function() {
+                            const lastChoice = jsPsych.data.get().last(1).values()[0]?.selected_choice;
+                            if (lastChoice === undefined) {
+                                console.error("❌ ERROR: No selected choice found!");
+                                return;
+                            }
+                        
+                            console.log(`🎵 Playing confirmation audio: audio/${q.confirmSound}`);
+                            
+                            let confirmAudio = new Audio(`audio/${q.confirmSound}`);
+                            confirmAudio.play();
+                        
+                            confirmAudio.onended = function () {
+                                console.log(`🔊 Now playing selected choice: audio/${q.sounds[lastChoice]}`);
+                                let selectedSound = new Audio(`audio/${q.sounds[lastChoice]}`);
+                                selectedSound.play().catch(error => console.error("❌ Error playing selected choice:", error));
+                            };
                         }
                     }
                 ],
@@ -501,29 +598,33 @@ function playSoundsSequentially(sounds, onComplete) {
 
 // Restore play-on-hover after sequential sounds finish
 function enableHoverPlay(sounds) {
-    console.log("🎧 Hover play enabled.");
+    console.log("🎧 Enabling hover play for sounds:", sounds);
+    
     let currentAudio = null;
 
     sounds.forEach((sound, index) => {
         const btn = document.getElementById(`btn-${index + 1}`);
-        if (btn) {
-            btn.onmouseenter = () => {
-                if (currentAudio) {
-                    currentAudio.pause();
-                    currentAudio.currentTime = 0;
-                }
-                console.log(`🔊 Hover play: ${sound}`);
-                currentAudio = new Audio(`audio/${sound.trim()}`);
-                currentAudio.play();
-            };
-
-            btn.onmouseleave = () => {
-                if (currentAudio) {
-                    currentAudio.pause();
-                    currentAudio.currentTime = 0;
-                }
-            };
+        if (!btn) {
+            console.warn(`⚠️ Button btn-${index + 1} not found for hover play`);
+            return;
         }
+
+        btn.onmouseenter = () => {
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio.currentTime = 0;
+            }
+            console.log(`🔊 Hover play: ${sound}`);
+            currentAudio = new Audio(`audio/${sound.trim()}`);
+            currentAudio.play();
+        };
+
+        btn.onmouseleave = () => {
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio.currentTime = 0;
+            }
+        };
     });
 }
 
@@ -578,19 +679,21 @@ const confirmChoice = {
     },
     choices: [],
     on_start: function() {
-        const lastChoice = jsPsych.data.get().last(1).values()[0].selected_choice;
-        const sounds = jsPsych.timelineVariable("sounds");
-
-        console.log(`🎵 Playing confirmation audio for choice: ${lastChoice}`);
-
-        // Play confirmation sound
-        let confirmAudio = new Audio(`audio/confirmation.mp3`);
+        const lastChoice = jsPsych.data.get().last(1).values()[0]?.selected_choice;
+        if (lastChoice === undefined) {
+            console.error("❌ ERROR: No selected choice found!");
+            return;
+        }
+    
+        console.log(`🎵 Playing confirmation audio: audio/${q.confirmSound}`);
+        
+        let confirmAudio = new Audio(`audio/${q.confirmSound}`);
         confirmAudio.play();
-
+    
         confirmAudio.onended = function () {
-            // After confirmation sound, play selected choice sound
-            let choiceAudio = new Audio(`audio/${sounds[lastChoice]}`);
-            choiceAudio.play();
+            console.log(`🔊 Now playing selected choice: audio/${q.sounds[lastChoice]}`);
+            let selectedSound = new Audio(`audio/${q.sounds[lastChoice]}`);
+            selectedSound.play().catch(error => console.error("❌ Error playing selected choice:", error));
         };
     },
     on_load: function() {
