@@ -11,10 +11,10 @@ const jsPsych = initJsPsych();
 async function loadQuestions() {
     console.log("📂 Attempting to fetch CSV...");
 
-    const csvPath = "./voice_questions.csv";  // ✅ Try relative path
+    const csvPath = "./all_questions.csv"; 
     
     try {
-        const response = await fetch(csvPath); // ✅ Removed no-cors
+        const response = await fetch(csvPath);
 
         console.log("📥 Fetch response:", response);
 
@@ -23,34 +23,38 @@ async function loadQuestions() {
         }
 
         const text = await response.text();
-        console.log("✅ CSV Loaded:\n", text); // Log CSV contents
+        console.log("✅ CSV Loaded:\n", text); 
 
-        const rows = text.trim().split("\n").slice(1); // Remove header
-        console.log("🔍 Parsed Rows:", rows); // Log parsed rows
+        const rows = text.trim().split("\n").slice(1); 
+        console.log("🔍 Parsed Rows:", rows); 
 
         if (rows.length === 0) {
             console.error("❌ No rows found in CSV!");
             return [];
         }
 
-        // ✅ Parse CSV rows into structured question objects
         const parsedData = rows.map((row, index) => {
             const columns = row.split(",");
 
-            if (columns.length < 9) { // Ensure all fields exist
+            if (columns.length < 10) { // Ensure all fields exist
                 console.error(`❌ Row ${index + 1} is incomplete:`, row);
                 return null;
             }
 
-            const [story, sound1, sound2, sound3, sound4, correctIndex, audioFile, confirmText, confirmSound] = columns.map(col => col.trim());
+            const [story, sound1, sound2, sound3, sound4, correctIndex, audioFile, confirmText, confirmSound, block] = columns.map(col => col.trim());
+
+            if (!block) {
+                console.error(`⚠️ Missing block type in row ${index + 1}:`, row);
+            }
 
             const questionObject = {
-                story: story.replace(/"/g, ""), // Remove extra quotes
+                story: story.replace(/"/g, ""), 
                 sounds: [sound1, sound2, sound3, sound4],
                 correctIndex: parseInt(correctIndex),
                 audioFile: audioFile,
-                confirmText: confirmText.replace(/"/g, ""), // Store confirmation text
-                confirmSound: confirmSound // Store confirmation sound file
+                confirmText: confirmText.replace(/"/g, ""),
+                confirmSound: confirmSound,
+                block: block // ✅ Ensure block is included
             };
 
             console.log(`✅ Loaded question ${index + 1}:`, questionObject);
@@ -58,7 +62,7 @@ async function loadQuestions() {
         }).filter(q => q !== null);
 
         console.log("📋 Final Questions Array:", parsedData);
-        return parsedData; // ✅ Merged return statement
+        return parsedData;
     } catch (error) {
         console.error("❌ CSV Load Error:", error);
         return [];
@@ -153,16 +157,19 @@ const storyAndSelection = {
             btn.setAttribute("disabled", "true");
         });
     
-        // Play the story audio
-        let storyAudio = new Audio(`audio/${jsPsych.timelineVariable("audioFile")}`);
+       // Play the story audio
+        console.log(`🎵 Attempting to play: audio/${q.story_audio}`);
+        console.log(`🔍 jsPsych.timelineVariable("audioFile"): ${jsPsych.timelineVariable("audioFile")}`);
+
+        let storyAudio = new Audio(`audio/${q.story_audio}`);  // ✅ FIXED: Always use q.story_audio
         storyAudio.play();
-    
+
         storyAudio.onended = function () {
             console.log("📢 Story finished, starting sequential playback.");
-            
+
             playSoundsSequentially(q.sounds, () => {
                 console.log("✅ Sequential playback finished, enabling hover play & selection.");
-                
+
                 enableButtonsWithFade(btns); // Enable buttons with fade
                 enableHoverPlay(q.sounds); // Restore hover play
             });
@@ -205,23 +212,71 @@ const storyAndSelection = {
 // Function to create jsPsych trials dynamically
 async function createTrials() {
     const questions = await loadQuestions();
+    
+    if (questions.length === 0) {
+        console.error("❌ No questions loaded! Cannot proceed.");
+        return;
+    }
+
+    // 1️⃣ Group Questions by Block
+    const blocks = {
+        voices: [],
+        faces: [],
+        bodies: []
+    };
+
+    questions.forEach(q => {
+        if (blocks[q.block]) {
+            blocks[q.block].push(q);
+        } else {
+            console.error(`⚠️ Unknown block type: ${q.block}`);
+        }
+    });
+
+    // 2️⃣ Shuffle the Block Order
+    const blockOrder = Object.keys(blocks).sort(() => Math.random() - 0.5);
+
+    // 3️⃣ Build the Experiment Timeline
     const timeline = [
         {
             type: htmlButtonResponse,
-            stimulus: "<p>Press continue to begin the study.</p>",
-            choices: ["Continue"]
+            stimulus: "<p>Welcome to the study! Press 'Start' to begin.</p>",
+            choices: ["Start"]
         }
     ];
 
-    questions.forEach((q, index) => {
-        timeline.push({
-            timeline: [
-                {
-                    type: htmlButtonResponse,
-                    stimulus: function() {
-                        console.log("🔥 Creating question:", q.story);
+    console.log("🔀 Block Order:", blockOrder);
+    console.log("📦 Blocks:", blocks);
 
-                        return `
+    blockOrder.forEach(block => {
+
+        console.log(`🚀 Processing block: ${block}`);
+        console.log(`📋 Found ${blocks[block].length} questions in ${block}`);
+
+        if (blocks[block].length === 0) {
+            console.warn(`⚠️ Skipping empty block: ${block}`);
+            return; // Skip empty blocks
+        }
+
+        if (blocks[block].length === 0) return; // Skip empty blocks
+
+        // 4️⃣ Add Instructions for Each Block
+        timeline.push({
+            type: htmlButtonResponse,
+            stimulus: `<p>Instructions for the ${block} block.</p>`,
+            choices: ["Continue"]
+        });
+
+        // 5️⃣ Shuffle Questions within the Block
+        const shuffledQuestions = blocks[block].sort(() => Math.random() - 0.5);
+
+        shuffledQuestions.forEach(q => {
+            console.log(`➕ Adding question: ${q.story}`)
+            timeline.push({
+                timeline: [
+                    {
+                        type: htmlButtonResponse,
+                        stimulus: `
                             <div id="content-container">
                                 <div id="story-container">
                                     <p id="story-text">${q.story}</p>
@@ -233,145 +288,117 @@ async function createTrials() {
                                     <button class="sound-btn" id="btn-4" disabled>4</button>
                                 </div>
                             </div>
-                        `;
-                    },
-                    choices: [],
-                    on_load: function () {
-                        console.log("🚀 on_load triggered! Checking content-container...");
-                        
-                        if (!document.querySelector("#content-container")) {
-                            console.error("❌ #content-container is missing!");
-                        } else {
-                            console.log("✅ #content-container found.");
-                        }
-                    
-                        // ✅ Select buttons ONCE to avoid redeclaration
-                        const btns = document.querySelectorAll(".sound-btn");
-                    
-                        // ✅ Ensure buttons have correct dataset.index
-                        btns.forEach((btn, index) => {
-                            btn.dataset.index = index;
-                            btn.classList.add("disabled", "no-hover");
-                            btn.setAttribute("disabled", "true");
-                    
-                            // ✅ Apply initial cursor styling
-                            btn.style.cursor = "not-allowed";
-                        });
-                    
-                        // ✅ Play the story audio
-                        let storyAudio = new Audio(`audio/${q.audioFile}`);
-                        storyAudio.play();
-                    
-                        storyAudio.onended = function () {
-                            console.log("📢 Story finished, starting sequential playback.");
-                            
-                            playSoundsSequentially(q.sounds, () => {
-                                console.log("✅ Sequential playback finished, enabling hover play & selection.");
-                                
-                                enableButtonsWithFade(btns);
-                                enableHoverPlay(q.sounds);
-                    
-                                // ✅ Reapply correct cursor styling AFTER enabling buttons
-                                btns.forEach(button => {
-                                    button.style.cursor = "pointer"; // Ensures clickable cursor after enabling
+                        `,
+                        choices: [],
+                        on_load: function () {
+                            const btns = document.querySelectorAll(".sound-btn");
+
+                            btns.forEach((btn, index) => {
+                                btn.dataset.index = index;
+                                btn.classList.add("disabled", "no-hover");
+                                btn.setAttribute("disabled", "true");
+                            });
+
+                            let storyAudio = new Audio(`audio/${q.audioFile}`);  // ✅ Change q.story_audio to q.audioFile
+                            console.log(`🎵 Attempting to play: audio/${q.audioFile}`); // ✅ Debugging log
+                            storyAudio.play();
+
+                            storyAudio.onended = function () {
+                                playSoundsSequentially(q.sounds, () => {
+                                    enableButtonsWithFade(btns);
+                                    enableHoverPlay(q.sounds);
+                                });
+                            };
+
+                            btns.forEach(btn => {
+                                btn.addEventListener("click", function(event) {
+                                    if (!answerSelectionEnabled) {
+                                        event.preventDefault();
+                                        return;
+                                    }
+
+                                    const chosenIndex = parseInt(this.dataset.index);
+                                    if (!isNaN(chosenIndex)) {
+                                        jsPsych.finishTrial({ selected_choice: chosenIndex });
+                                    }
                                 });
                             });
-                        };
-                    
-                        // ✅ Handle button selection properly
-                        btns.forEach(btn => {
-                            btn.addEventListener("click", function(event) {
-                                if (!answerSelectionEnabled) {
-                                    event.preventDefault();
-                                    console.log("Answer selection blocked! Waiting for sounds to finish.");
-                                    return;
-                                }
-                    
-                                const chosenIndex = parseInt(this.dataset.index);
-                                console.log(`✅ Button ${this.id} clicked! Extracted index: ${chosenIndex}`);
-                    
-                                if (isNaN(chosenIndex)) {
-                                    console.error("❌ ERROR: chosenIndex is NaN! dataset.index is not set correctly.");
-                                    return;
-                                }
-                    
-                                // ✅ Store choice in jsPsych trial data
-                                jsPsych.finishTrial({ selected_choice: chosenIndex });
+                        },
+                        on_finish: function(data) {
+                            const lastChoiceIndex = data.selected_choice; // The index the participant selected
+            
+                            if (lastChoiceIndex === undefined) {
+                                console.error("❌ ERROR: No response recorded!");
+                                return;
+                            }
+            
+                            // Store all relevant fields from the CSV
+                            data.story = q.story;
+                            data.story_audio = q.audioFile;
+                            data.option1 = q.sounds[0];
+                            data.option2 = q.sounds[1];
+                            data.option3 = q.sounds[2];
+                            data.option4 = q.sounds[3];
+                            data.correct_index = q.correctIndex;
+                            data.correct_response = q.sounds[q.correctIndex]; // Store the correct answer text
+                            data.selected_index = lastChoiceIndex;
+                            data.selected_response = q.sounds[lastChoiceIndex]; // Store the participant's choice text
+                            data.confirmation_text = q.confirmText;
+                            data.confirmation_audio = q.confirmSound;
+                            data.block = q.block;
+            
+                            console.log("✅ Trial data recorded:", data);
+                        }
+                    },
+                    {
+                        type: htmlButtonResponse,
+                        stimulus: function() {
+                            const lastChoice = jsPsych.data.get().last(1).values()[0]?.selected_choice;
+                            if (lastChoice === undefined) return `<p>Error: Could not load confirmation text.</p>`;
+
+                            return `
+                                <div id="content-container">
+                                    <div id="story-container">
+                                        <p id="story-text">${q.confirmText}</p>
+                                    </div>
+                                    <div class="button-container">
+                                        <button class="confirm-btn" id="confirm-yes">✅ Yes</button>
+                                        <button class="confirm-btn" id="confirm-no">❌ No</button>
+                                    </div>
+                                </div>
+                            `;
+                        },
+                        choices: [],
+                        on_start: function() {
+                            const lastChoice = jsPsych.data.get().last(1).values()[0]?.selected_choice;
+                            let confirmAudio = new Audio(`audio/${q.confirmSound}`);
+                            confirmAudio.play();
+
+                            confirmAudio.onended = function () {
+                                let selectedSound = new Audio(`audio/${q.sounds[lastChoice]}`);
+                                selectedSound.play();
+                            };
+                        },
+                        on_load: function() {
+                            document.getElementById("confirm-yes").addEventListener("click", () => {
+                                jsPsych.finishTrial({ confirmed: true });
                             });
-                        });
-                    }
-                },
-                {
-                    type: htmlButtonResponse,
-                    stimulus: function() {
-                        const lastChoice = jsPsych.data.get().last(1).values()[0]?.selected_choice;
-                        if (lastChoice === undefined) {
-                            console.error("❌ ERROR: lastChoice is undefined!");
-                            return `<p>Error: Could not load confirmation text.</p>`;
+
+                            document.getElementById("confirm-no").addEventListener("click", () => {
+                                jsPsych.finishTrial({ confirmed: false });
+                            });
                         }
-
-                        return `
-                            <div id="content-container">
-                                <div id="story-container">
-                                    <p id="story-text">${q.confirmText}</p>
-                                </div>
-                                <div class="button-container">
-                                    <button class="confirm-btn" id="confirm-yes">✅ Yes</button>
-                                    <button class="confirm-btn" id="confirm-no">❌ No</button>
-                                </div>
-                            </div>
-                        `;
-                    },
-                    choices: [],
-                    on_start: function() {
-                        const lastChoice = jsPsych.data.get().last(1).values()[0]?.selected_choice;
-
-                        if (lastChoice === undefined) {
-                            console.error("❌ ERROR: lastChoice is undefined!");
-                            return;
-                        }
-
-                        console.log("🎵 Playing confirmation sound:", q.confirmSound);
-                        let confirmationSound = new Audio(`audio/${q.confirmSound}`);
-                        confirmationSound.play();
-
-                        confirmationSound.onended = function () {
-                            console.log("🔊 Confirmation sound finished. Now playing selected option...");
-
-                            let selectedSound = new Audio(`audio/${q.sounds[lastChoice]}`);
-                            selectedSound.play();
-                        };
-                    },
-                    on_load: function() {
-                        console.log("✅ Confirmation page loaded.");
-
-                        document.getElementById("confirm-yes").addEventListener("click", function() {
-                            console.log("✅ User confirmed selection.");
-                            jsPsych.finishTrial({ confirmed: true });
-                        });
-
-                        document.getElementById("confirm-no").addEventListener("click", function() {
-                            console.log("❌ User wants to choose again.");
-                            jsPsych.finishTrial({ confirmed: false });
-                        });
                     }
+                ],
+                loop_function: function() {
+                    const lastTrialData = jsPsych.data.get().last(1).values()[0];
+                    return lastTrialData && lastTrialData.confirmed === false;
                 }
-            ],
-            loop_function: function() {
-                const lastTrialData = jsPsych.data.get().last(1).values()[0];
-
-                if (lastTrialData && lastTrialData.confirmed === false) {
-                    console.log("🔄 User chose 'No' → Repeating selection.");
-                    return true;
-                } else {
-                    console.log("✅ User confirmed → Moving forward.");
-                    return false;
-                }
-            }
+            });
         });
     });
 
-    // **Final Message**
+    // 6️⃣ Add the Final Thank You Message
     timeline.push({
         type: htmlButtonResponse,
         stimulus: "<p>Thank you for participating! Click below to download your data.</p>",
@@ -380,6 +407,9 @@ async function createTrials() {
             jsPsych.data.get().localSave('csv', 'experiment_data.csv');
         }
     });
+
+    console.log("📋 Constructed timeline before running jsPsych:", timeline);
+
 
     jsPsych.run(timeline);
 }
