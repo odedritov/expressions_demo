@@ -36,12 +36,12 @@ async function loadQuestions() {
         const parsedData = rows.map((row, index) => {
             const columns = row.split(",");
 
-            if (columns.length < 10) { // Ensure all fields exist
+            if (columns.length < 11) { // Ensure all fields exist
                 console.error(`❌ Row ${index + 1} is incomplete:`, row);
                 return null;
             }
 
-            const [story, sound1, sound2, sound3, sound4, correctIndex, audioFile, confirmText, confirmSound, block] = columns.map(col => col.trim());
+            const [story, sound1, sound2, sound3, sound4, correctIndex, audioFile, confirmText, confirmSound, block, isFamiliarizationRaw] = columns.map(col => col.trim());
 
             if (!block) {
                 console.error(`⚠️ Missing block type in row ${index + 1}:`, row);
@@ -54,7 +54,8 @@ async function loadQuestions() {
                 audioFile: audioFile,
                 confirmText: confirmText.replace(/"/g, ""),
                 confirmSound: confirmSound,
-                block: block // ✅ Ensure block is included
+                block: block,
+                isFamiliarization: isFamiliarizationRaw?.toUpperCase() === "TRUE" // ✅ NEW!
             };
 
             console.log(`✅ Loaded question ${index + 1}:`, questionObject);
@@ -219,6 +220,9 @@ const storyAndSelection = {
     }
 };
 
+
+
+
 // Function to create jsPsych trials dynamically
 async function createTrials() {
     const questions = await loadQuestions();
@@ -277,10 +281,18 @@ async function createTrials() {
             choices: ["Continue"]
         });
 
-        // 5️⃣ Shuffle Questions within the Block
-        const shuffledQuestions = blocks[block].sort(() => Math.random() - 0.5);
+         // 5️⃣ Shuffle Questions within the Block
+         const blockQuestions = blocks[block];
+         const familiarizationQuestions = blockQuestions.filter(q => q.isFamiliarization);
+        const testQuestions = blockQuestions.filter(q => !q.isFamiliarization);
 
-        shuffledQuestions.forEach(q => {
+        // Put familiarization first, then shuffle test questions
+        const orderedBlockQuestions = [
+        ...familiarizationQuestions,
+        ...testQuestions.sort(() => Math.random() - 0.5)
+        ];
+       
+        orderedBlockQuestions.forEach(q => {
             console.log(`➕ Adding question: ${q.story}`)
             timeline.push({
                 timeline: [
@@ -432,6 +444,7 @@ async function createTrials() {
                             data.confirmation_text = q.confirmText;
                             data.confirmation_audio = q.confirmSound;
                             data.block = q.block;
+                            data.isFamiliarization = q.isFamiliarization;
                         
                             console.log("✅ Trial data recorded:", data);
                         }
@@ -481,7 +494,6 @@ async function createTrials() {
                         on_load: function() {
                             console.log("🟢 Confirmation page loaded, waiting for user input.");
                         
-                            // Ensure buttons exist before adding event listeners
                             const confirmYes = document.getElementById("confirm-yes");
                             const confirmNo = document.getElementById("confirm-no");
                         
@@ -490,43 +502,71 @@ async function createTrials() {
                                 return;
                             }
                         
-                            // ✅ Remove existing event listeners to prevent duplicates
+                            // 🧼 Remove any previous listeners by replacing buttons
                             confirmYes.replaceWith(confirmYes.cloneNode(true));
                             confirmNo.replaceWith(confirmNo.cloneNode(true));
                         
-                            // ✅ Re-select buttons after cloning
-                            document.getElementById("confirm-yes").addEventListener("click", () => {
+                            const yesBtn = document.getElementById("confirm-yes");
+                            const noBtn = document.getElementById("confirm-no");
+                        
+                            const lastTrial = jsPsych.data.get().last(1).values()[0];
+                            const isFamiliarization = lastTrial.isFamiliarization;
+                            const wasCorrect = lastTrial.selected_index === lastTrial.correct_index;
+                        
+                            yesBtn.addEventListener("click", () => {
                                 console.log("✅ User confirmed choice!");
-                                jsPsych.finishTrial({ confirmed: true });
+                            
+                                if (isFamiliarization) {
+                                    const attempt = window._familiarizationAttempt || 1;
+                                    const shouldRepeat = !wasCorrect && attempt === 1;
+                            
+                                    const audioFile = shouldRepeat
+                                        ? "audio/confirmation_repeat.mp3"
+                                        : "audio/confirmation_go.mp3";
+                            
+                                    const audio = new Audio(audioFile);
+                                    audio.play();
+                            
+                                    audio.onended = () => {
+                                        jsPsych.finishTrial({
+                                            confirmed: !shouldRepeat, // ✅ Only mark true if NOT repeating
+                                            familiarizationAttempt: attempt,
+                                            familiarizationCorrect: wasCorrect,
+                                            familiarizationRepeat: shouldRepeat
+                                        });
+                                    };
+                                } else {
+                                    jsPsych.finishTrial({ confirmed: true });
+                                }
                             });
                         
-                            document.getElementById("confirm-no").addEventListener("click", () => {
+                            noBtn.addEventListener("click", () => {
                                 console.log("❌ User chose to reselect!");
-                                jsPsych.finishTrial({ confirmed: false });
-                            });
                         
-                            console.log("✅ Event listeners attached to confirmation buttons.");
+                                jsPsych.finishTrial({
+                                    confirmed: false,
+                                    familiarizationRepeat: true
+                                });
+                            });
                         },
                         on_start: function() {
-                            const lastTrialData = jsPsych.data.get().last(1).values()[0];  // ✅ Fetch correct last response
+                            const lastTrial = jsPsych.data.get().last(1).values()[0];
+                            const isFamiliarization = lastTrial.isFamiliarization;
                         
-                            if (!lastTrialData || lastTrialData.selected_choice === undefined) {
-                                console.error("❌ ERROR: No selected choice found!");
-                                return;
+                            // ⏱️ Track number of attempts for this familiarization question
+                            if (isFamiliarization) {
+                                window._familiarizationAttempt = (window._familiarizationAttempt || 0) + 1;
+                                console.log(`🔁 Familiarization attempt #${window._familiarizationAttempt}`);
                             }
                         
-                            console.log(`🎵 Playing confirmation audio: audio/${lastTrialData.confirmation_audio}`);
-                        
-                            let confirmAudio = new Audio(`audio/${lastTrialData.confirmation_audio}`);
+                            // 🎵 Play the confirmation audio first
+                            const confirmAudio = new Audio(`audio/${lastTrial.confirmation_audio}`);
                             confirmAudio.play();
                         
-                            confirmAudio.onended = function () {
-                                console.log(`🔊 Now playing selected choice: ${lastTrialData.selected_response}`);
-                                
-                                // ✅ Only play audio for voices, skip for faces/bodies
-                                if (lastTrialData.block === "voices") {
-                                    let selectedSound = new Audio(`audio/${lastTrialData.selected_response}`);
-                                    selectedSound.play().catch(error => console.error("❌ Error playing selected choice:", error));
+                            confirmAudio.onended = () => {
+                                if (lastTrial.block === "voices") {
+                                    const sound = new Audio(`audio/${lastTrial.selected_response}`);
+                                    sound.play();
                                 } else {
                                     console.log("🖼️ No audio to play for faces/bodies.");
                                 }
@@ -535,15 +575,53 @@ async function createTrials() {
                     }
                 ],
                 loop_function: function(data) {
-                    const lastTrialData = jsPsych.data.get().last(1).values()[0];
+                    const lastTrialData = data.values().at(-1);
                 
-                    // Prevent accidental looping for wrong blocks
                     if (!lastTrialData || typeof lastTrialData.confirmed === "undefined") {
                         console.error("❌ Loop function error: No confirmation data found.");
-                        return false; // ✅ Don't loop, move to the next trial
+                        return false; // Prevent accidental looping
                     }
                 
-                    return lastTrialData.confirmed === false; // ✅ Only repeat if the user selected "No"
+                    const isFamiliarization = lastTrialData.isFamiliarization === true || lastTrialData.isFamiliarization === "TRUE";
+                    const selectedIndex = lastTrialData.selected_index;
+                    const correctIndex = lastTrialData.correct_index;
+                
+                    if (!isFamiliarization) {
+                        // 👤 Regular trial: only loop if participant clicked “No”
+                        return lastTrialData.confirmed === false;
+                    }
+                
+                    // 🧪 Familiarization trial logic
+                    const attemptCount = window._familiarizationAttempt || 1;
+                    window._familiarizationAttempt = attemptCount; // Save globally
+                
+                    const isCorrect = selectedIndex === correctIndex;
+                    console.log(`🔁 Familiarization attempt #${attemptCount} | Correct? ${isCorrect}`);
+                
+                    // If participant clicked “No” (reselect), repeat
+                    if (lastTrialData.confirmed === false) {
+                        console.log("🔄 Repeating trial: participant chose to reselect.");
+                        return true;
+                    }
+                
+                    // ✅ First attempt correct → move on
+                    if (isCorrect && attemptCount === 1) {
+                        window._familiarizationAttempt = 0; // reset for next block
+                        window._famShouldPlayGo = true;
+                        return false;
+                    }
+                
+                    // ❌ First attempt wrong → allow 1 retry
+                    if (!isCorrect && attemptCount === 1) {
+                        console.log("🔁 Repeating familiarization trial (first incorrect).");
+                        window._famShouldPlayGo = false;
+                        return true;
+                    }
+                
+                    // ❌ Second attempt (wrong or right) → move on
+                    window._familiarizationAttempt = 0;
+                    window._famShouldPlayGo = true;
+                    return false;
                 }
             });
         });
