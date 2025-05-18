@@ -2,891 +2,608 @@ import { initJsPsych } from "jspsych";
 import htmlButtonResponse from "@jspsych/plugin-html-button-response";
 import audioKeyboardResponse from "@jspsych/plugin-audio-keyboard-response";
 
-
-
 // Initialize jsPsych
 const jsPsych = initJsPsych();
 
-// Function to load and parse CSV
-async function loadQuestions() {
-    console.log("📂 Attempting to fetch CSV...");
+// STATE MANAGEMENT - Centralize state variables
+const experimentState = {
+  answerSelectionEnabled: false,
+  currentAudio: null,
+  familiarizationAttempt: 0
+};
 
+// UTILITY FUNCTIONS - Group all helper functions together
+const utils = {
+  /**
+   * Loads and parses the CSV file containing questions
+   */
+  async loadQuestions() {
+    console.log("📂 Attempting to fetch CSV...");
     const csvPath = "./all_questions.csv"; 
     
     try {
-        const response = await fetch(csvPath);
+      const response = await fetch(csvPath);
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
 
-        console.log("📥 Fetch response:", response);
+      const text = await response.text();
+      console.log("✅ CSV Loaded");
 
-        if (!response.ok) {
-            throw new Error(`HTTP error! Status: ${response.status}`);
-        }
-
-        const text = await response.text();
-        console.log("✅ CSV Loaded:\n", text); 
-
-        const rows = text.trim().split("\n").slice(1); 
-        console.log("🔍 Parsed Rows:", rows); 
-
-        if (rows.length === 0) {
-            console.error("❌ No rows found in CSV!");
-            return [];
-        }
-
-        const parsedData = rows.map((row, index) => {
-            const columns = row.split(",");
-
-            if (columns.length < 11) { // Ensure all fields exist
-                console.error(`❌ Row ${index + 1} is incomplete:`, row);
-                return null;
-            }
-
-            const [story, sound1, sound2, sound3, sound4, correctIndex, audioFile, confirmText, confirmSound, block, isFamiliarizationRaw] = columns.map(col => col.trim());
-
-            if (!block) {
-                console.error(`⚠️ Missing block type in row ${index + 1}:`, row);
-            }
-
-            const questionObject = {
-                story: story.replace(/"/g, ""), 
-                sounds: [sound1, sound2, sound3, sound4],
-                correctIndex: parseInt(correctIndex),
-                audioFile: audioFile,
-                confirmText: confirmText.replace(/"/g, ""),
-                confirmSound: confirmSound,
-                block: block,
-                isFamiliarization: isFamiliarizationRaw?.toUpperCase() === "TRUE" // ✅ NEW!
-            };
-
-            console.log(`✅ Loaded question ${index + 1}:`, questionObject);
-            return questionObject;
-        }).filter(q => q !== null);
-
-        console.log("📋 Final Questions Array:", parsedData);
-        return parsedData;
-    } catch (error) {
-        console.error("❌ CSV Load Error:", error);
+      const rows = text.trim().split("\n").slice(1); 
+      if (rows.length === 0) {
+        console.error("❌ No rows found in CSV!");
         return [];
-    }
-}
+      }
 
+      const parsedData = rows.map((row, index) => {
+        const columns = row.split(",");
 
-const storyAndSelection = {
-    type: htmlButtonResponse,
-    stimulus: function() {
-        return `
-            <div id="content-container">
-                <div id="story-container">
-                    <p id="story-text">${jsPsych.timelineVariable("story")}</p>
-                </div>
-                <div class="button-container">
-                    <button class="sound-btn" id="btn-1" disabled>1</button>
-                    <button class="sound-btn" id="btn-2" disabled>2</button>
-                    <button class="sound-btn" id="btn-3" disabled>3</button>
-                    <button class="sound-btn" id="btn-4" disabled>4</button>
-                </div>
-            </div>
-        `;
-    },
-    choices: [],
-    button_html: function(choice, choice_index) {
-        return `<button class="jspsych-btn sound-btn disabled no-hover" id="btn-${choice_index + 1}" disabled data-index="${choice_index}">${choice}</button>`;
-    },
-    on_load: function () {
-
-        if (q.block === "faces" || q.block === "bodies") {
-            document.body.classList.add(`${q.block}-block`); // Apply correct class
-        } else {
-            document.body.classList.remove("faces-block", "bodies-block"); // Ensure cleanup
+        if (columns.length < 11) {
+          console.error(`❌ Row ${index + 1} is incomplete:`, row);
+          return null;
         }
 
-        jsPsych.getDisplayElement().addEventListener("jspsych-trial-end", function () {
-            document.body.classList.remove("faces-block");  // Remove after the trial ends
-        });
-        
-        console.log("🚀 Trial started! Checking content...");
-    
-        // Log the raw HTML
-        console.log("🔎 jsPsych Content:", document.querySelector(".jspsych-content")?.innerHTML);
-        
-        // Check for #content-container
-        if (!document.querySelector("#content-container")) {
-            console.error("❌ #content-container is MISSING!");
-        } else {
-            console.log("✅ #content-container is present.");
-        }
+        const [story, sound1, sound2, sound3, sound4, correctIndex, audioFile, confirmText, confirmSound, block, isFamiliarizationRaw] = columns.map(col => col.trim());
 
-        const btns = document.querySelectorAll(".sound-btn");
-    
-        // Ensure #content-container exists
-        setTimeout(() => {
-            let contentContainer = document.querySelector("#content-container");
-            if (!contentContainer) {
-                console.log("❌ #content-container is missing! Manually adding it.");
-    
-                // Create the container
-                contentContainer = document.createElement("div");
-                contentContainer.id = "content-container";
-                contentContainer.style.cssText = `
-                    max-width: 800px;
-                    width: 90%;
-                    padding: 30px;
-                    background: white;
-                    border-radius: 20px;
-                    box-shadow: 6px 6px 15px rgba(0, 0, 0, 0.2);
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: center;
-                    position: relative;
-                `;
-    
-                // Find story and button container
-                const storyContainer = document.querySelector("#story-container");
-                const buttonContainer = document.querySelector(".button-container");
-    
-                // Move them inside #content-container
-                if (storyContainer && buttonContainer) {
-                    contentContainer.appendChild(storyContainer);
-                    contentContainer.appendChild(buttonContainer);
-                }
-    
-                // Inject into jsPsych content
-                const jspsychContent = document.querySelector(".jspsych-content");
-                if (jspsychContent) {
-                    jspsychContent.prepend(contentContainer);
-                    console.log("✅ #content-container manually added.");
-                }
-            } else {
-                console.log("✅ #content-container already exists.");
-            }
-        }, 500); // Short delay to ensure jsPsych has loaded
-    
-        // Disable buttons initially
-        btns.forEach(btn => {
-            btn.classList.add("disabled", "no-hover");
-            btn.setAttribute("disabled", "true");
-        });
-    
-       // Play the story audio
-        console.log(`🎵 Attempting to play: audio/${q.story_audio}`);
-        console.log(`🔍 jsPsych.timelineVariable("audioFile"): ${jsPsych.timelineVariable("audioFile")}`);
-
-        let storyAudio = new Audio(`audio/${q.story_audio}`);  // ✅ FIXED: Always use q.story_audio
-        storyAudio.play();
-
-        storyAudio.onended = function () {
-            console.log("📢 Story finished, starting sequential playback.");
-
-            playSoundsSequentially(q.sounds, () => {
-                console.log("✅ Sequential playback finished, enabling hover play & selection.");
-
-                enableButtonsWithFade(btns); // Enable buttons with fade
-                enableHoverPlay(q.sounds); // Restore hover play
-            });
+        return {
+          story: story.replace(/"/g, ""), 
+          sounds: [sound1, sound2, sound3, sound4],
+          correctIndex: parseInt(correctIndex) - 1,
+          audioFile: audioFile,
+          confirmText: confirmText.replace(/"/g, ""),
+          confirmSound: confirmSound,
+          block: block,
+          isFamiliarization: isFamiliarizationRaw?.toUpperCase() === "TRUE"
         };
-    
-        // ✅ Block button selection until `answerSelectionEnabled = true`
-        btns.forEach(btn => {
-            btn.addEventListener("click", function(event) {
-                console.log(`🖱️ Clicked: ${this.id}`);
-        
-                if (!answerSelectionEnabled) {
-                    event.preventDefault();
-                    console.log("🚫 Selection blocked! answerSelectionEnabled is FALSE");
-                } else {
-                    console.log(`✅ Button ${this.id} clicked! Processing response...`);
-        
-                    // ✅ Store the correct response in jsPsych's data
-                    const chosenIndex = parseInt(this.dataset.index); // Extract from button data-index
-        
-                    console.log("🔢 Storing response:", chosenIndex);
-        
-                    jsPsych.finishTrial({ response: chosenIndex }); // ✅ Store choice in jsPsych
-                }
-            });
-        });
-    },
-    on_finish: function(data) {
-        console.log("🔎 on_finish triggered!");
-        console.log("User response:", data.response);
-    
-        if (!answerSelectionEnabled) {
-            console.log("🚫 Trial blocked from finishing!");
-            return false; // Prevent trial from ending early
-        }
-    
-        console.log("✅ Trial finished successfully!");
+      }).filter(q => q !== null);
+
+      console.log("📋 Parsed Questions:", parsedData.length);
+      return parsedData;
+    } catch (error) {
+      console.error("❌ CSV Load Error:", error);
+      return [];
     }
-};
+  },
 
-
-
-
-// Function to create jsPsych trials dynamically
-async function createTrials() {
-    const questions = await loadQuestions();
-    
-    if (questions.length === 0) {
-        console.error("❌ No questions loaded! Cannot proceed.");
-        return;
-    }
-
-    // 1️⃣ Group Questions by Block
-    const blocks = {
-        voices: [],
-        faces: [],
-        bodies: []
-    };
-
-    questions.forEach(q => {
-        if (blocks[q.block]) {
-            blocks[q.block].push(q);
-        } else {
-            console.error(`⚠️ Unknown block type: ${q.block}`);
-        }
-    });
-
-    // 2️⃣ Shuffle the Block Order
-    const blockOrder = Object.keys(blocks).sort(() => Math.random() - 0.5);
-
-    // 3️⃣ Build the Experiment Timeline
-    const timeline = [
-        {
-            type: htmlButtonResponse,
-            stimulus: "<p>Welcome to the study! Press 'Start' to begin.</p>",
-            choices: ["Start"]
-        }
-    ];
-
-    console.log("🔀 Block Order:", blockOrder);
-    console.log("📦 Blocks:", blocks);
-
-    blockOrder.forEach(block => {
-
-        console.log(`🚀 Processing block: ${block}`);
-        console.log(`📋 Found ${blocks[block].length} questions in ${block}`);
-
-        if (blocks[block].length === 0) {
-            console.warn(`⚠️ Skipping empty block: ${block}`);
-            return; // Skip empty blocks
-        }
-
-        if (blocks[block].length === 0) return; // Skip empty blocks
-
-        // 4️⃣ Add Instructions for Each Block
-        timeline.push({
-            type: htmlButtonResponse,
-            stimulus: `<p>Instructions for the ${block} block.</p>`,
-            choices: ["Continue"]
-        });
-
-         // 5️⃣ Shuffle Questions within the Block
-         const blockQuestions = blocks[block];
-         const familiarizationQuestions = blockQuestions.filter(q => q.isFamiliarization);
-        const testQuestions = blockQuestions.filter(q => !q.isFamiliarization);
-
-        // Put familiarization first, then shuffle test questions
-        const orderedBlockQuestions = [
-        ...familiarizationQuestions,
-        ...testQuestions.sort(() => Math.random() - 0.5)
-        ];
-       
-        orderedBlockQuestions.forEach(q => {
-            console.log(`➕ Adding question: ${q.story}`)
-            timeline.push({
-                timeline: [
-                    {
-                        type: htmlButtonResponse,
-                        stimulus: `
-                            <div id="content-container" class="${q.block}-container">
-                                ${
-                                    q.block === "bodies"
-                                    ? `
-                                        <div class="bodies-flex-container">
-                                            <div id="story-container" class="bodies-story">
-                                                <p id="story-text">${q.story}</p>
-                                            </div>
-                                            <div class="bodies-images">
-                                                <img class="body-option" id="btn-1" src="bodies/${q.sounds[0]}" data-index="0" />
-                                                <img class="body-option" id="btn-2" src="bodies/${q.sounds[1]}" data-index="1" />
-                                                <img class="body-option" id="btn-3" src="bodies/${q.sounds[2]}" data-index="2" />
-                                                <img class="body-option" id="btn-4" src="bodies/${q.sounds[3]}" data-index="3" />
-                                            </div>
-                                        </div>
-                                    `
-                                    : q.block === "faces"
-                                    ? `
-                                        <div id="story-container">
-                                            <p id="story-text">${q.story}</p>
-                                        </div>
-                                        <div class="button-container">
-                                            <img class="face-option" id="btn-1" src="faces/${q.sounds[0]}" data-index="0" />
-                                            <img class="face-option" id="btn-2" src="faces/${q.sounds[1]}" data-index="1" />
-                                            <img class="face-option" id="btn-3" src="faces/${q.sounds[2]}" data-index="2" />
-                                            <img class="face-option" id="btn-4" src="faces/${q.sounds[3]}" data-index="3" />
-                                        </div>
-                                    `
-                                    : `
-                                        <div id="story-container">
-                                            <p id="story-text">${q.story}</p>
-                                        </div>
-                                        <div class="button-container">
-                                            <button class="sound-btn" id="btn-1" disabled>1</button>
-                                            <button class="sound-btn" id="btn-2" disabled>2</button>
-                                            <button class="sound-btn" id="btn-3" disabled>3</button>
-                                            <button class="sound-btn" id="btn-4" disabled>4</button>
-                                        </div>
-                                    `
-                                }
-                            </div>
-                        `,
-                        choices: [],
-                        on_load: function () {
-
-                            // Determine if the current block is "faces"
-                            if (q.block === "faces" || q.block === "bodies") {
-                                document.body.classList.add(`${q.block}-block`); // Apply correct class
-                            } else {
-                                document.body.classList.remove("faces-block", "bodies-block"); // Ensure cleanup
-                            }
-
-                            // Add event listener to clean up after trial ends
-                            jsPsych.getDisplayElement().addEventListener("jspsych-trial-end", function () {
-                                document.body.classList.remove("faces-block");  // Remove after the trial ends
-                            });
-                            // Select both buttons (for voices/bodies) and images (for faces)
-                            const btns = document.querySelectorAll(".sound-btn, .face-option, .body-option");
-                        
-                            // Disable all options initially
-                            btns.forEach((btn, index) => {
-                                btn.dataset.index = index;
-                                btn.classList.add("disabled", "no-hover");
-                                btn.setAttribute("disabled", "true");
-                            });
-                        
-                            // Play the story audio
-                            let storyAudio = new Audio(`audio/${q.audioFile}`);
-                            console.log(`🎵 Attempting to play: audio/${q.audioFile}`);
-                            storyAudio.play();
-                        
-                            storyAudio.onended = function () {
-                                console.log("📢 Story finished.");
-                            
-                                if (q.block === "faces" || q.block === "bodies") {
-                                    console.log(`🖼️ ${q.block} block detected! Enabling images.`);
-                                    enableSelection(btns); // Enable selection immediately for images
-                                } else {
-                                    console.log("🎵 Playing sequential sounds for non-image blocks.");
-                                    playSoundsSequentially(q.sounds, () => {
-                                        enableSelection(btns);
-                                        enableHoverPlay(q.sounds); // ✅ Restore hover play for voices
-                                    });
-                                }
-                            };
-                        
-                            // ✅ Function to enable buttons or images after the appropriate delay
-                            function enableSelection(btns) {
-                                btns.forEach(btn => {
-                                    btn.classList.remove("disabled", "no-hover");
-                                    btn.removeAttribute("disabled");
-                                    btn.style.cursor = "pointer"; // Ensure cursor changes properly
-                                });
-                        
-                                answerSelectionEnabled = true; // ✅ Allow selections
-                                console.log("🟢 answerSelectionEnabled set to true.");
-                            }
-                        
-                            // ✅ Handle both button & image selection
-                            btns.forEach(btn => {
-                                btn.addEventListener("click", function(event) {
-                                    if (!answerSelectionEnabled) {
-                                        event.preventDefault();
-                                        console.log("🚫 Selection blocked until ready.");
-                                        return;
-                                    }
-                            
-                                    const chosenIndex = parseInt(this.dataset.index);
-                                    if (!isNaN(chosenIndex)) {
-                                        console.log(`✅ Selected choice: ${chosenIndex}, File: ${q.sounds[chosenIndex]}`);
-                                        jsPsych.finishTrial({ 
-                                            selected_choice: chosenIndex,
-                                            selected_file: q.sounds[chosenIndex] 
-                                        });
-                                    }
-                                });
-                            });
-                        },
-                        on_finish: function(data) {
-                            console.log("🔎 on_finish triggered!");
-                        
-                            const lastChoiceIndex = data.selected_choice; // The index the participant selected
-                        
-                            if (lastChoiceIndex === undefined) {
-                                console.error("❌ ERROR: No response recorded!");
-                                return;
-                            }
-                        
-                            // ✅ Clear old event listeners to prevent duplicate confirmation screens
-                            jsPsych.getDisplayElement().replaceChildren();
-                        
-                            // ✅ Store all relevant fields from the CSV
-                            data.story = q.story;
-                            data.story_audio = q.audioFile;
-                            data.option1 = q.sounds[0];
-                            data.option2 = q.sounds[1];
-                            data.option3 = q.sounds[2];
-                            data.option4 = q.sounds[3];
-                            data.correct_index = q.correctIndex;
-                            data.correct_response = q.sounds[q.correctIndex]; // Store the correct answer text
-                            data.selected_index = lastChoiceIndex;
-                            data.selected_response = q.sounds[lastChoiceIndex]; // Store the participant's choice text
-                            data.confirmation_text = q.confirmText;
-                            data.confirmation_audio = q.confirmSound;
-                            data.block = q.block;
-                            data.isFamiliarization = q.isFamiliarization;
-                        
-                            console.log("✅ Trial data recorded:", data);
-                        }
-                    },
-                    {
-                        type: htmlButtonResponse,
-                        stimulus: function() {
-                            const lastTrialData = jsPsych.data.get().last(1).values()[0];
-
-                        
-                            if (!lastTrialData || lastTrialData.selected_choice === undefined) {
-                                console.error("❌ ERROR: No previous selection found!");
-                                return `<p>Error: Could not load confirmation.</p>`;
-                            }
-                        
-                            console.log("📝 Using last trial data for confirmation:", lastTrialData);
-                        
-                            // Choose the correct class for the confirmation image
-                            let confirmationImageClass = "";
-                            if (lastTrialData.block === "faces") {
-                                confirmationImageClass = "faces-confirmation";
-                            } else if (lastTrialData.block === "bodies") {
-                                confirmationImageClass = "bodies-confirmation";
-                            }
-                        
-                            return `
-                                <div id="content-container">
-                                    <div id="story-container">
-                                        <p id="story-text">${lastTrialData.confirmation_text}</p>
-                                    </div>
-                                    <div class="confirmation-container">
-                                        ${
-                                            lastTrialData.block === "faces"
-                                                ? `<img class="confirmation-img ${confirmationImageClass}" src="faces/${lastTrialData.selected_response}" />`
-                                                : lastTrialData.block === "bodies"
-                                                    ? `<img class="confirmation-img ${confirmationImageClass}" src="bodies/${lastTrialData.selected_response}" />`
-                                                    : ""
-                                        }
-                                    </div>
-                                    <div class="button-container">
-                                        <button class="confirm-btn" id="confirm-yes">✅ Yes</button>
-                                        <button class="confirm-btn" id="confirm-no">❌ No</button>
-                                    </div>
-                                </div>
-                            `;
-                        },
-                        choices: [],
-                        on_load: function() {
-                            console.log("🟢 Confirmation page loaded, waiting for user input.");
-                        
-                            const confirmYes = document.getElementById("confirm-yes");
-                            const confirmNo = document.getElementById("confirm-no");
-                        
-                            if (!confirmYes || !confirmNo) {
-                                console.error("❌ ERROR: Confirmation buttons are missing!");
-                                return;
-                            }
-                        
-                            // 🧼 Remove any previous listeners by replacing buttons
-                            confirmYes.replaceWith(confirmYes.cloneNode(true));
-                            confirmNo.replaceWith(confirmNo.cloneNode(true));
-                        
-                            const yesBtn = document.getElementById("confirm-yes");
-                            const noBtn = document.getElementById("confirm-no");
-                        
-                            const lastTrial = jsPsych.data.get().last(1).values()[0];
-                            const isFamiliarization = lastTrial.isFamiliarization;
-                            const wasCorrect = lastTrial.familiarizationCorrect ?? (lastTrial.selected_index === lastTrial.correct_index);
-                        
-                            yesBtn.addEventListener("click", () => {
-                                console.log("✅ User confirmed choice!");
-                            
-                                if (isFamiliarization) {
-                                    const attempt = window._familiarizationAttempt || 1;
-                                    const shouldRepeat = !wasCorrect && attempt === 1;
-                            
-                                    const audioFile = shouldRepeat
-                                        ? "audio/confirmation_repeat.mp3"
-                                        : "audio/confirmation_go.mp3";
-                            
-                                    const audio = new Audio(audioFile);
-                                    audio.play();
-                            
-                                    audio.onended = () => {
-                                        jsPsych.finishTrial({
-                                            confirmed: !shouldRepeat, // ✅ Only mark true if NOT repeating
-                                            familiarizationAttempt: attempt,
-                                            familiarizationCorrect: wasCorrect,
-                                            familiarizationRepeat: shouldRepeat
-                                        });
-                                    };
-                                } else {
-                                    jsPsych.finishTrial({ confirmed: true });
-                                }
-                            });
-                        
-                            noBtn.addEventListener("click", () => {
-                                console.log("❌ User chose to reselect!");
-                        
-                                jsPsych.finishTrial({
-                                    confirmed: false,
-                                    familiarizationRepeat: true
-                                });
-                            });
-                        },
-                        on_start: function() {
-                            const lastTrial = jsPsych.data.get().last(1).values()[0];
-                            const isFamiliarization = lastTrial.isFamiliarization;
-                        
-                            // ⏱️ Track number of attempts for this familiarization question
-                            if (isFamiliarization) {
-                                window._familiarizationAttempt = (window._familiarizationAttempt || 0) + 1;
-                                console.log(`🔁 Familiarization attempt #${window._familiarizationAttempt}`);
-                            }
-                        
-                            // 🎵 Play the confirmation audio first
-                            const confirmAudio = new Audio(`audio/${lastTrial.confirmation_audio}`);
-                            confirmAudio.play();
-                        
-                            confirmAudio.onended = () => {
-                                if (lastTrial.block === "voices") {
-                                    const sound = new Audio(`audio/${lastTrial.selected_response}`);
-                                    sound.play();
-                                } else {
-                                    console.log("🖼️ No audio to play for faces/bodies.");
-                                }
-                            };
-                        },
-                        on_finish: function(data) {
-                            const lastTrialData = jsPsych.data.get().last(2).values()[0]; // go back 2 to get the main trial
-                            if (!lastTrialData) {
-                                console.warn("⚠️ No previous trial data found.");
-                                return;
-                            }
-                        
-                            // Copy relevant info into the confirmation row
-                            data.story = lastTrialData.story;
-                            data.story_audio = lastTrialData.story_audio;
-                            data.option1 = lastTrialData.option1;
-                            data.option2 = lastTrialData.option2;
-                            data.option3 = lastTrialData.option3;
-                            data.option4 = lastTrialData.option4;
-                            data.correct_index = lastTrialData.correct_index;
-                            data.correct_response = lastTrialData.correct_response;
-                            data.selected_index = lastTrialData.selected_index;
-                            data.selected_response = lastTrialData.selected_response;
-                            data.confirmation_text = lastTrialData.confirmation_text;
-                            data.confirmation_audio = lastTrialData.confirmation_audio;
-                            data.block = lastTrialData.block;
-                            data.isFamiliarization = lastTrialData.isFamiliarization;
-                            data.familiarizationCorrect = lastTrialData.familiarizationCorrect;
-        
-                        
-                            console.log("📝 Copied main trial info into confirmation row:", data);
-                        },
-                    }
-                ],
-                loop_function: function(data) {
-                    const lastTrialData = data.values().at(-1);
-                
-                    if (!lastTrialData || typeof lastTrialData.confirmed === "undefined") {
-                        console.error("❌ Loop function error: No confirmation data found.");
-                        return false; // Prevent accidental looping
-                    }
-                
-                    const isFamiliarization = lastTrialData.isFamiliarization === true || lastTrialData.isFamiliarization === "TRUE";
-                    const selectedIndex = lastTrialData.selected_index;
-                    const correctIndex = lastTrialData.correct_index;
-                
-                    if (!isFamiliarization) {
-                        // 👤 Regular trial: only loop if participant clicked “No”
-                        return lastTrialData.confirmed === false;
-                    }
-                
-                    // 🧪 Familiarization trial logic
-                    const attemptCount = window._familiarizationAttempt || 1;
-                    window._familiarizationAttempt = attemptCount; // Save globally
-                
-                    const isCorrect = selectedIndex === correctIndex;
-                    console.log(`🔁 Familiarization attempt #${attemptCount} | Correct? ${isCorrect}`);
-                
-                    // If participant clicked “No” (reselect), repeat
-                    if (lastTrialData.confirmed === false) {
-                        console.log("🔄 Repeating trial: participant chose to reselect.");
-                        return true;
-                    }
-                
-                    // ✅ First attempt correct → move on
-                    if (isCorrect && attemptCount === 1) {
-                        window._familiarizationAttempt = 0; // reset for next block
-                        window._famShouldPlayGo = true;
-                        return false;
-                    }
-                
-                    // ❌ First attempt wrong → allow 1 retry
-                    if (!isCorrect && attemptCount === 1) {
-                        console.log("🔁 Repeating familiarization trial (first incorrect).");
-                        window._famShouldPlayGo = false;
-                        return true;
-                    }
-                
-                    // ❌ Second attempt (wrong or right) → move on
-                    window._familiarizationAttempt = 0;
-                    window._famShouldPlayGo = true;
-                    return false;
-                }
-            });
-        });
-    });
-
-    // 6️⃣ Add the Final Thank You Message
-    timeline.push({
-        type: htmlButtonResponse,
-        stimulus: "<p>Thank you for participating! Click below to download your data.</p>",
-        choices: ["Download Data"],
-        on_finish: function() {
-            jsPsych.data.get().localSave('csv', 'experiment_data.csv');
-        }
-    });
-
-    console.log("📋 Constructed timeline before running jsPsych:", timeline);
-
-
-    jsPsych.run(timeline);
-}
-
-
-// Function to play the story and manage button activation
-function playStoryAndManageButtons(q, btns) {
-    let storyAudio = new Audio(`audio/${q.audioFile}`);
-    console.log(`🎙️ Playing story: ${q.audioFile}`);
-
-    storyAudio.play().catch(error => console.error("Audio playback error:", error));
-
-    storyAudio.onended = function () {
-        console.log("📢 Story finished, starting sequential playback.");
-        playSoundsSequentially(q.sounds, () => {
-            console.log("✅ Sequential playback finished, enabling hover play & selection.");
-            enableButtonsWithFade(btns);
-            enableHoverPlay(q.sounds);
-        });
-    };
-}
-
-// Function to enable buttons with a fade-in effect
-function enableButtonsWithFade(btns) {
-    console.log("🎭 Enabling buttons...");
-
-    btns.forEach(btn => {
-        btn.classList.remove("disabled", "no-hover");
-        btn.removeAttribute("disabled");
-        btn.style.transition = "opacity 0.6s ease-in-out"; 
-        btn.style.opacity = "1"; 
-        console.log(`✅ Enabled button: ${btn.id}`);
-    });
-}
-
-// Function to play sounds sequentially, then trigger a callback when done
-function playSoundsSequentially(sounds, onComplete) {
+  /**
+   * Plays sounds sequentially, then executes callback when done
+   */
+  playSoundsSequentially(sounds, onComplete) {
     let index = 0;
-    let totalDuration = 0;
-
-    console.log("🎵 Starting sequential playback...");
-    
-    // 🚫 Grey out and disable all buttons
     const btns = document.querySelectorAll(".sound-btn");
+    
+    // Disable all buttons initially
     btns.forEach(btn => {
-        btn.classList.add("disabled", "no-hover");
-        btn.setAttribute("disabled", "true");
-        btn.style.opacity = "0.5"; // Make buttons visibly greyed-out
+      btn.classList.add("disabled", "no-hover");
+      btn.setAttribute("disabled", "true");
+      btn.style.opacity = "0.5";
     });
 
     function playNextSound() {
-        if (index >= sounds.length) {
-            console.log(`✅ All sounds played. Total duration: ${totalDuration}ms`);
+      if (index >= sounds.length) {
+        experimentState.answerSelectionEnabled = true;
+        onComplete();
+        return;
+      }
 
-            // 🟢 Enable buttons after last sound plays
-            enableButtonsWithFade(btns);
-            answerSelectionEnabled = true;
-            console.log("🟢 answerSelectionEnabled set to:", answerSelectionEnabled);
-            onComplete();
-            return;
-        }
+      // Clear previous highlights
+      document.querySelectorAll(".sound-btn").forEach(btn => btn.classList.remove("highlight"));
+      
+      // Highlight current button
+      const btn = document.getElementById(`btn-${index + 1}`);
+      if (btn) btn.classList.add("highlight");
 
-        document.querySelectorAll(".sound-btn").forEach(btn => btn.classList.remove("highlight"));
-        const btn = document.getElementById(`btn-${index + 1}`);
+      // Play current sound
+      const audio = new Audio(`audio/${sounds[index]}`);
+      audio.play();
 
-        // ✅ Even if `no-hover` is set, manually apply highlight class
-        if (btn) {
-            btn.classList.add("highlight");
-        }
-
-        const audio = new Audio(`audio/${sounds[index]}`);
-        console.log(`🔊 Playing sound ${index + 1}: ${sounds[index]}`);
-
-        audio.onloadedmetadata = function () {
-            totalDuration += audio.duration * 1000;
-        };
-
-        audio.play();
-
-        audio.onended = function () {
-            if (btn) btn.classList.remove("highlight");
-            index++;
-            playNextSound();
-        };
+      audio.onended = function() {
+        if (btn) btn.classList.remove("highlight");
+        index++;
+        playNextSound();
+      };
     }
 
     playNextSound();
-}
+  },
 
-// Restore play-on-hover after sequential sounds finish
-function enableHoverPlay(sounds) {
-    console.log("🎧 Enabling hover play for sounds:", sounds);
-    
-    let currentAudio = null;
-
-    sounds.forEach((sound, index) => {
-        const btn = document.getElementById(`btn-${index + 1}`);
-        if (!btn) {
-            console.warn(`⚠️ Button btn-${index + 1} not found for hover play`);
-            return;
-        }
-
-        btn.onmouseenter = () => {
-            if (currentAudio) {
-                currentAudio.pause();
-                currentAudio.currentTime = 0;
-            }
-            console.log(`🔊 Hover play: ${sound}`);
-            currentAudio = new Audio(`audio/${sound.trim()}`);
-            currentAudio.play();
-        };
-
-        btn.onmouseleave = () => {
-            if (currentAudio) {
-                currentAudio.pause();
-                currentAudio.currentTime = 0;
-            }
-        };
+  /**
+   * Enables buttons with fade-in animation
+   */
+  enableButtons(buttons) {
+    buttons.forEach(btn => {
+      btn.classList.remove("disabled", "no-hover");
+      btn.removeAttribute("disabled");
+      btn.style.transition = "opacity 0.6s ease-in-out"; 
+      btn.style.opacity = "1";
     });
-}
+    experimentState.answerSelectionEnabled = true;
+  },
 
-// Ensure fade-in effect is properly applied in CSS
-document.addEventListener("DOMContentLoaded", () => {
+  /**
+   * Enables hover-play functionality for sound buttons
+   */
+  enableHoverPlay(sounds) {
+    sounds.forEach((sound, index) => {
+      const btn = document.getElementById(`btn-${index + 1}`);
+      if (!btn) return;
+
+      btn.onmouseenter = () => {
+        if (experimentState.currentAudio) {
+          experimentState.currentAudio.pause();
+          experimentState.currentAudio.currentTime = 0;
+        }
+        experimentState.currentAudio = new Audio(`audio/${sound.trim()}`);
+        experimentState.currentAudio.play();
+      };
+
+      btn.onmouseleave = () => {
+        if (experimentState.currentAudio) {
+          experimentState.currentAudio.pause();
+          experimentState.currentAudio.currentTime = 0;
+        }
+      };
+    });
+  },
+
+  /**
+   * Adds necessary CSS styles to the document
+   */
+  addStyles() {
     const style = document.createElement("style");
     style.innerHTML = `
-        .enabled {
-            transition: opacity 0.5s ease-in-out;
-            opacity: 1 !important;
-        }
-        .sound-btn {
-            opacity: 0; /* Start hidden */
-        }
+      .enabled {
+        transition: opacity 0.5s ease-in-out;
+        opacity: 1 !important;
+      }
+      .sound-btn {
+        opacity: 0; /* Start hidden */
+      }
+      .disabled {
+        cursor: not-allowed !important;
+        opacity: 0.5 !important;
+      }
+      .highlight {
+        background-color: rgba(0, 0, 255, 0.2) !important;
+        border-color: blue !important;
+      }
+      .faces-block .face-option, .bodies-block .body-option {
+        cursor: pointer;
+        transition: transform 0.2s;
+      }
+      .faces-block .face-option:hover, .bodies-block .body-option:hover {
+        transform: scale(1.05);
+      }
     `;
     document.head.appendChild(style);
-});
+  }
+};
 
-
-let hoverEnabled = false; // Controls hover play behavior
-let answerSelectionEnabled = false; // Controls when answers can be selected
-
-
-
-
-
-const confirmChoice = {
-    type: htmlButtonResponse,
-    stimulus: function() {
-        const lastChoice = jsPsych.data.get().last(1).values()[0].selected_choice;
-        
-        if (isNaN(lastChoice)) {
-            console.error("❌ ERROR: lastChoice is NaN!"); 
-            return `<p>Error: Could not load confirmation text.</p>`;
-        }
-
-        return `
-            <div id="content-container">
-                <div id="story-container">
-                    <p id="story-text">You selected option ${lastChoice + 1}. Are you sure about your choice?</p>
+// TRIAL COMPONENTS - Organize trial-related code
+const trialComponents = {
+  /**
+   * Creates the main story and selection trial
+   */
+  createStoryAndSelectionTrial(question) {
+    return {
+      type: htmlButtonResponse,
+      stimulus: function() {
+        // Different HTML structure based on block type
+        if (question.block === "bodies") {
+          return `
+            <div id="content-container" class="bodies-container">
+              <div class="bodies-flex-container">
+                <div id="story-container" class="bodies-story">
+                  <p id="story-text">${question.story}</p>
                 </div>
-                <div class="button-container">
-                    <button class="confirm-btn yes-btn" id="confirm-yes">
-                        ✅ Yes
-                    </button>
-                    <button class="confirm-btn no-btn" id="confirm-no">
-                        ❌ No
-                    </button>
+                <div class="bodies-images">
+                  <img class="body-option" id="btn-1" src="bodies/${question.sounds[0]}" data-index="0" />
+                  <img class="body-option" id="btn-2" src="bodies/${question.sounds[1]}" data-index="1" />
+                  <img class="body-option" id="btn-3" src="bodies/${question.sounds[2]}" data-index="2" />
+                  <img class="body-option" id="btn-4" src="bodies/${question.sounds[3]}" data-index="3" />
                 </div>
+              </div>
             </div>
-        `;
-    },
-    choices: [],
-    on_start: function() {
-        const lastChoice = jsPsych.data.get().last(1).values()[0]?.selected_choice;
-        if (lastChoice === undefined) {
-            console.error("❌ ERROR: No selected choice found!");
-            return;
+          `;
+        } else if (question.block === "faces") {
+          return `
+            <div id="content-container" class="faces-container">
+              <div id="story-container">
+                <p id="story-text">${question.story}</p>
+              </div>
+              <div class="button-container">
+                <img class="face-option" id="btn-1" src="faces/${question.sounds[0]}" data-index="0" />
+                <img class="face-option" id="btn-2" src="faces/${question.sounds[1]}" data-index="1" />
+                <img class="face-option" id="btn-3" src="faces/${question.sounds[2]}" data-index="2" />
+                <img class="face-option" id="btn-4" src="faces/${question.sounds[3]}" data-index="3" />
+              </div>
+            </div>
+          `;
+        } else {
+          return `
+            <div id="content-container">
+              <div id="story-container">
+                <p id="story-text">${question.story}</p>
+              </div>
+              <div class="button-container">
+                <button class="sound-btn" id="btn-1" disabled>1</button>
+                <button class="sound-btn" id="btn-2" disabled>2</button>
+                <button class="sound-btn" id="btn-3" disabled>3</button>
+                <button class="sound-btn" id="btn-4" disabled>4</button>
+              </div>
+            </div>
+          `;
         }
-    
-        const lastTrialData = jsPsych.data.get().last(1).values()[0];
-        if (!lastTrialData) {
-            console.error("❌ No previous trial data available for confirmation.");
-            return;
+      },
+      choices: [],
+      on_load: function() {
+        // Set appropriate body class for styling
+        if (question.block === "faces" || question.block === "bodies") {
+          document.body.classList.add(`${question.block}-block`);
+        } else {
+          document.body.classList.remove("faces-block", "bodies-block");
         }
 
-        console.log(`🎵 Playing confirmation audio: audio/${lastTrialData.confirmation_audio}`);
-        let confirmAudio = new Audio(`audio/${lastTrialData.confirmation_audio}`);
-        confirmAudio.play();
-        confirmAudio.onended = function () {
-            if (lastTrialData.block === "voices") {
-                console.log(`🔊 Now playing selected choice: audio/${lastTrialData.selected_response}`);
-                let selectedSound = new Audio(`audio/${lastTrialData.selected_response}`);
-                selectedSound.play().catch(error => console.error("❌ Error playing selected choice:", error));
-            } else {
-                console.log("🖼️ No additional audio to play for faces/bodies.");
-            }
+        // Clean up after trial ends
+        jsPsych.getDisplayElement().addEventListener("jspsych-trial-end", function() {
+          document.body.classList.remove("faces-block", "bodies-block");
+        });
+
+        // Reset selection state
+        experimentState.answerSelectionEnabled = false;
+
+        // Select all interactive elements
+        const options = document.querySelectorAll(".sound-btn, .face-option, .body-option");
+        
+        // Disable all options initially
+        options.forEach((option, index) => {
+          option.dataset.index = index;
+          option.classList.add("disabled", "no-hover");
+          option.setAttribute("disabled", "true");
+        });
+        
+        // Play the story audio
+        let storyAudio = new Audio(`audio/${question.audioFile}`);
+        console.log(`🎵 Playing story audio: audio/${question.audioFile}`);
+        storyAudio.play();
+        
+        storyAudio.onended = function() {
+          console.log("📢 Story audio finished");
+        
+          if (question.block === "faces" || question.block === "bodies") {
+            console.log(`🖼️ ${question.block} block - enabling images`);
+            utils.enableButtons(options);
+          } else {
+            console.log("🎵 Voice block - playing sequential sounds");
+            utils.playSoundsSequentially(question.sounds, () => {
+              utils.enableButtons(options);
+              utils.enableHoverPlay(question.sounds);
+            });
+          }
         };
-    },
-    on_load: function() {
-        console.log("🔄 Confirmation screen loaded.");
+        
+        // Set up click event handlers
+        options.forEach(option => {
+          option.addEventListener("click", function(event) {
+            if (!experimentState.answerSelectionEnabled) {
+              event.preventDefault();
+              console.log("🚫 Selection blocked - not enabled yet");
+              return;
+            }
+        
+            const chosenIndex = parseInt(this.dataset.index);
+            if (!isNaN(chosenIndex)) {
+              console.log(`✅ Selected option ${chosenIndex + 1}`);
+              jsPsych.finishTrial({
+                selected_choice: chosenIndex,
+                selected_file: question.sounds[chosenIndex]
+              });
+            }
+          });
+        });
+      },
+      on_finish: function(data) {
+        const chosenIndex = data.selected_choice;
+        
+        if (chosenIndex === undefined) {
+          console.error("❌ No response recorded!");
+          return;
+        }
+        
+        // Store all relevant data
+        data.story = question.story;
+        data.story_audio = question.audioFile;
+        data.option1 = question.sounds[0];
+        data.option2 = question.sounds[1];
+        data.option3 = question.sounds[2];
+        data.option4 = question.sounds[3];
+        data.correct_index = question.correctIndex;
+        data.correct_response = question.sounds[question.correctIndex];
+        data.selected_index = chosenIndex;
+        data.selected_response = question.sounds[chosenIndex];
+        data.confirmation_text = question.confirmText;
+        data.confirmation_audio = question.confirmSound;
+        data.block = question.block;
+        data.isFamiliarization = question.isFamiliarization;
+        
+        console.log("✅ Trial data recorded");
+      }
+    };
+  },
 
-        document.getElementById("confirm-yes").addEventListener("click", () => {
-            console.log("✅ User confirmed choice!");
+  /**
+   * Creates the confirmation trial
+   */
+  createConfirmationTrial() {
+    return {
+      type: htmlButtonResponse,
+      stimulus: function() {
+        const lastTrialData = jsPsych.data.get().last(1).values()[0];
+        
+        if (!lastTrialData || lastTrialData.selected_choice === undefined) {
+          console.error("❌ No previous selection found!");
+          return `<p>Error: Could not load confirmation.</p>`;
+        }
+        
+        let confirmationImage = "";
+        if (lastTrialData.block === "faces") {
+          confirmationImage = `<img class="confirmation-img faces-confirmation" src="faces/${lastTrialData.selected_response}" />`;
+        } else if (lastTrialData.block === "bodies") {
+          confirmationImage = `<img class="confirmation-img bodies-confirmation" src="bodies/${lastTrialData.selected_response}" />`;
+        }
+        
+        return `
+          <div id="content-container">
+            <div id="story-container">
+              <p id="story-text">${lastTrialData.confirmation_text}</p>
+            </div>
+            <div class="confirmation-container">
+              ${confirmationImage}
+            </div>
+            <div class="button-container">
+              <button class="confirm-btn" id="confirm-yes">✅ Yes</button>
+              <button class="confirm-btn" id="confirm-no">❌ No</button>
+            </div>
+          </div>
+        `;
+      },
+      choices: [],
+      on_load: function() {
+        const confirmYes = document.getElementById("confirm-yes");
+        const confirmNo = document.getElementById("confirm-no");
+        
+        if (!confirmYes || !confirmNo) {
+          console.error("❌ Confirmation buttons are missing!");
+          return;
+        }
+        
+        // Clone buttons to remove old event listeners
+        confirmYes.replaceWith(confirmYes.cloneNode(true));
+        confirmNo.replaceWith(confirmNo.cloneNode(true));
+        
+        const yesBtn = document.getElementById("confirm-yes");
+        const noBtn = document.getElementById("confirm-no");
+        
+        const lastTrial = jsPsych.data.get().last(1).values()[0];
+        const isFamiliarization = lastTrial.isFamiliarization;
+        const wasCorrect = lastTrial.selected_index === lastTrial.correct_index;
+        
+        yesBtn.addEventListener("click", () => {
+          console.log("✅ User confirmed choice");
+        
+          if (isFamiliarization) {
+            const attempt = experimentState.familiarizationAttempt || 1;
+            const shouldRepeat = !wasCorrect && attempt === 1;
+        
+            const audioFile = shouldRepeat
+              ? "audio/confirmation_repeat.mp3"
+              : "audio/confirmation_go.mp3";
+        
+            const audio = new Audio(audioFile);
+            audio.play();
+        
+            audio.onended = () => {
+              jsPsych.finishTrial({
+                confirmed: !shouldRepeat,
+                familiarizationAttempt: attempt,
+                familiarizationCorrect: wasCorrect,
+                familiarizationRepeat: shouldRepeat
+              });
+            };
+          } else {
             jsPsych.finishTrial({ confirmed: true });
+          }
         });
-
-        document.getElementById("confirm-no").addEventListener("click", () => {
-            console.log("❌ User chose to reselect!");
-            jsPsych.finishTrial({ confirmed: false });
+        
+        noBtn.addEventListener("click", () => {
+          console.log("❌ User chose to reselect");
+          jsPsych.finishTrial({
+            confirmed: false,
+            familiarizationRepeat: true
+          });
         });
-    }
+      },
+      on_start: function() {
+        const lastTrial = jsPsych.data.get().last(1).values()[0];
+        
+        // Track familiarization attempts
+        if (lastTrial.isFamiliarization) {
+          experimentState.familiarizationAttempt = (experimentState.familiarizationAttempt || 0) + 1;
+          console.log(`🔁 Familiarization attempt #${experimentState.familiarizationAttempt}`);
+        }
+        
+        // Play confirmation audio
+        const confirmAudio = new Audio(`audio/${lastTrial.confirmation_audio}`);
+        confirmAudio.play();
+        
+        confirmAudio.onended = () => {
+          if (lastTrial.block === "voices") {
+            const sound = new Audio(`audio/${lastTrial.selected_response}`);
+            sound.play();
+          }
+        };
+      },
+      on_finish: function(data) {
+        const lastTrialData = jsPsych.data.get().last(2).values()[0];
+        if (!lastTrialData) {
+          console.warn("⚠️ No previous trial data found");
+          return;
+        }
+        
+        // Copy data from the main trial
+        Object.assign(data, {
+          story: lastTrialData.story,
+          story_audio: lastTrialData.story_audio,
+          option1: lastTrialData.option1,
+          option2: lastTrialData.option2,
+          option3: lastTrialData.option3,
+          option4: lastTrialData.option4,
+          correct_index: lastTrialData.correct_index,
+          correct_response: lastTrialData.correct_response,
+          selected_index: lastTrialData.selected_index,
+          selected_response: lastTrialData.selected_response,
+          confirmation_text: lastTrialData.confirmation_text,
+          confirmation_audio: lastTrialData.confirmation_audio,
+          block: lastTrialData.block,
+          isFamiliarization: lastTrialData.isFamiliarization,
+          familiarizationCorrect: lastTrialData.familiarizationCorrect
+        });
+      }
+    };
+  }
 };
 
+/**
+ * Creates and runs the entire experiment
+ */
+async function createExperiment() {
+  // Add CSS styles
+  utils.addStyles();
+  
+  // Load questions from CSV
+  const questions = await utils.loadQuestions();
+  
+  if (questions.length === 0) {
+    console.error("❌ No questions loaded! Cannot proceed.");
+    return;
+  }
 
-const selectionLoop = {
-    timeline: [storyAndSelection, confirmChoice],
-    loop_function: function() {
-        const lastTrialData = jsPsych.data.get().last(1).values();
-        return lastTrialData.length > 0 && lastTrialData[0].response === 1; // 🔄 Repeat if "Choose Again" was selected
+  // Group questions by block
+  const blocks = {
+    voices: [],
+    faces: [],
+    bodies: []
+  };
+
+  questions.forEach(q => {
+    if (blocks[q.block]) {
+      blocks[q.block].push(q);
+    } else {
+      console.error(`⚠️ Unknown block type: ${q.block}`);
     }
-};
+  });
 
-// Load and start the experiment
-createTrials();
+  // Randomize block order
+  const blockOrder = Object.keys(blocks).sort(() => Math.random() - 0.5);
+  console.log("🔀 Randomized block order:", blockOrder);
+
+  // Build experiment timeline
+  const timeline = [
+    {
+      type: htmlButtonResponse,
+      stimulus: "<p>Welcome to the study! Press 'Start' to begin.</p>",
+      choices: ["Start"]
+    }
+  ];
+
+  // Add each block to the timeline
+  blockOrder.forEach(blockType => {
+    const blockQuestions = blocks[blockType];
+    
+    if (blockQuestions.length === 0) {
+      console.warn(`⚠️ Skipping empty block: ${blockType}`);
+      return;
+    }
+
+    // Add block instructions
+    timeline.push({
+      type: htmlButtonResponse,
+      stimulus: `<p>Instructions for the ${blockType} block.</p>`,
+      choices: ["Continue"]
+    });
+
+    // Sort questions - familiarization first, then randomized test questions
+    const familiarizationQuestions = blockQuestions.filter(q => q.isFamiliarization);
+    const testQuestions = blockQuestions.filter(q => !q.isFamiliarization)
+      .sort(() => Math.random() - 0.5);
+
+    const orderedQuestions = [...familiarizationQuestions, ...testQuestions];
+    
+    // Add each question to the timeline
+    orderedQuestions.forEach(question => {
+      timeline.push({
+        timeline: [
+          trialComponents.createStoryAndSelectionTrial(question),
+          trialComponents.createConfirmationTrial()
+        ],
+        loop_function: function(data) {
+          const lastTrialData = data.values().at(-1);
+          
+          if (!lastTrialData || typeof lastTrialData.confirmed === "undefined") {
+            console.error("❌ Loop function error: No confirmation data");
+            return false;
+          }
+          
+          const isFamiliarization = lastTrialData.isFamiliarization === true || 
+                                   lastTrialData.isFamiliarization === "TRUE";
+          const isCorrect = lastTrialData.selected_index === lastTrialData.correct_index;
+          
+          // If "No" was clicked, repeat
+          if (lastTrialData.confirmed === false) {
+            return true;
+          }
+          
+          if (!isFamiliarization) {
+            return false; // Regular trial - proceed
+          }
+          
+          // Familiarization logic
+          const attemptCount = experimentState.familiarizationAttempt || 1;
+          
+          // First attempt correct - move on
+          if (isCorrect && attemptCount === 1) {
+            experimentState.familiarizationAttempt = 0;
+            return false;
+          }
+          
+          // First attempt wrong - retry
+          if (!isCorrect && attemptCount === 1) {
+            return true;
+          }
+          
+          // Second attempt - move on regardless
+          experimentState.familiarizationAttempt = 0;
+          return false;
+        }
+      });
+    });
+  });
+
+  // Add final thank you and data download
+  timeline.push({
+    type: htmlButtonResponse,
+    stimulus: "<p>Thank you for participating! Click below to download your data.</p>",
+    choices: ["Download Data"],
+    on_finish: function() {
+      jsPsych.data.get().localSave('csv', 'experiment_data.csv');
+    }
+  });
+
+  // Run the experiment
+  console.log("🚀 Starting experiment with timeline:", timeline.length, "items");
+  jsPsych.run(timeline);
+}
+
+// Start the experiment when the document is loaded
+document.addEventListener("DOMContentLoaded", createExperiment);
