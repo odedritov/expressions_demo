@@ -1,5 +1,5 @@
 story,option1,option2,option3,option4,correct_index,story_audio,confirmation,confirmation_audio,block,isFamiliarization
-Which of these animal sounds comes from a cow?,dog.mp3,cat.mp3,cow.mp3,frog.mp3,2,voices_familiarization.mp3,Do you think that this one is the cow?,voices_familiarization_confirmation.mp3,voices,TRUE
+Which of these animal sounds comes from a cow?,dog.mp3,cat.mp3,cow.mp3,frog.mp3,3,voices_familiarization.mp3,Do you think that this one is the cow?,voices_familiarization_confirmation.mp3,voices,TRUE
 This person is resting comfortably on a peaceful day.,F_desire.mp3,F_surprise.mp3,F_anger.mp3,F_content.mp3,4,contentment_demo.mp3,Is this person resting comfortably on a peaceful day?,contentment_demo_confirmation.mp3,voices,FALSE
 Which of these faces belongs to a cat?,cat_face.jpg,dog_face.jpg,monkey_face.jpg,pig_face.jpg,1,faces_familiarization.mp3,Do you think that this face belongs to a cat?,faces_familiarization_confirmation.mp3,faces,TRUE
 This person's friend just told them a funny story.,BF_amusement.JPG,BF_fear.jpg,BF_pride.jpg,BF_sadness.jpg,1,amusement_demo.mp3,Did this peron's friend tell them a funny story?,amusement_demo_confirmation.mp3,faces,FALSE

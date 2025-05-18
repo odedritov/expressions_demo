@@ -453,6 +453,7 @@ async function createTrials() {
                         type: htmlButtonResponse,
                         stimulus: function() {
                             const lastTrialData = jsPsych.data.get().last(1).values()[0];
+
                         
                             if (!lastTrialData || lastTrialData.selected_choice === undefined) {
                                 console.error("❌ ERROR: No previous selection found!");
@@ -511,7 +512,7 @@ async function createTrials() {
                         
                             const lastTrial = jsPsych.data.get().last(1).values()[0];
                             const isFamiliarization = lastTrial.isFamiliarization;
-                            const wasCorrect = lastTrial.selected_index === lastTrial.correct_index;
+                            const wasCorrect = lastTrial.familiarizationCorrect ?? (lastTrial.selected_index === lastTrial.correct_index);
                         
                             yesBtn.addEventListener("click", () => {
                                 console.log("✅ User confirmed choice!");
@@ -571,7 +572,34 @@ async function createTrials() {
                                     console.log("🖼️ No audio to play for faces/bodies.");
                                 }
                             };
-                        }
+                        },
+                        on_finish: function(data) {
+                            const lastTrialData = jsPsych.data.get().last(2).values()[0]; // go back 2 to get the main trial
+                            if (!lastTrialData) {
+                                console.warn("⚠️ No previous trial data found.");
+                                return;
+                            }
+                        
+                            // Copy relevant info into the confirmation row
+                            data.story = lastTrialData.story;
+                            data.story_audio = lastTrialData.story_audio;
+                            data.option1 = lastTrialData.option1;
+                            data.option2 = lastTrialData.option2;
+                            data.option3 = lastTrialData.option3;
+                            data.option4 = lastTrialData.option4;
+                            data.correct_index = lastTrialData.correct_index;
+                            data.correct_response = lastTrialData.correct_response;
+                            data.selected_index = lastTrialData.selected_index;
+                            data.selected_response = lastTrialData.selected_response;
+                            data.confirmation_text = lastTrialData.confirmation_text;
+                            data.confirmation_audio = lastTrialData.confirmation_audio;
+                            data.block = lastTrialData.block;
+                            data.isFamiliarization = lastTrialData.isFamiliarization;
+                            data.familiarizationCorrect = lastTrialData.familiarizationCorrect;
+        
+                        
+                            console.log("📝 Copied main trial info into confirmation row:", data);
+                        },
                     }
                 ],
                 loop_function: function(data) {
